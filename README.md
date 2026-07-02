@@ -36,7 +36,7 @@
 
 - [ ] 로그인
 - [ ] 워크스페이스 생성
-- [ ] 워크스페이스 공유
+- [ ] 워크스페이스 공유/초대
 - [ ] 아이디어 블록 생성/연결/삭제
 
 ### 선택 기능
@@ -60,6 +60,17 @@
 > 필요한 테이블, 주요 필드, 데이터 타입, 테이블 간 관계를 정리
 
 <!-- ERD 이미지 또는 테이블 정의 -->
+### User
+| userID | name | ID(unique) | password |
+
+### Workspace
+| workspaceID | name | creator(foreign key: userID) | userID(foreign key) |
+
+### Block
+| blockID | content | workspaceID | parent_block(NULLable) | created_datetime | updated_datetime |
+
+### Comment
+| commentID | content | author(foreign key) | workspaceID | solved |
 
 ---
 
@@ -69,7 +80,39 @@
 
 | Method | Endpoint | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
-|  |  |  |  |  |
+| POST   | `/api/v1/auth/signup`                                      | 회원가입            | `id`, `password`, `name`                 | `userID`, `id`, `name`   |
+| POST   | `/api/v1/auth/login`                                       | 로그인             | `id`, `password`                         | `accessToken`, `user`    |
+| POST   | `/api/v1/auth/logout`                                      | 로그아웃            | 없음                                       | `message`                |
+| GET    | `/api/v1/users/me`                                         | 내 정보 조회         | 없음                                       | `userID`, `id`, `name`   |
+| POST   | `/api/v1/workspaces`                                       | 워크스페이스 생성       | `name`                                   | `workspace`              |
+| GET    | `/api/v1/workspaces`                                       | 내 워크스페이스 목록 조회  | 없음                                       | `workspaces[]`           |
+| GET    | `/api/v1/workspaces/{workspaceID}`                         | 워크스페이스 상세 조회    | 없음                                       | `workspace`, `members[]` |
+| PATCH  | `/api/v1/workspaces/{workspaceID}`                         | 워크스페이스 수정       | `name`                                   | `workspace`              |
+| DELETE | `/api/v1/workspaces/{workspaceID}`                         | 워크스페이스 삭제       | 없음                                       | `message`                |
+| POST   | `/api/v1/workspaces/{workspaceID}/invite`                  | 워크스페이스 초대       | `id` 또는 `userID`                         | `invitation`             |
+| GET    | `/api/v1/workspaces/{workspaceID}/members`                 | 멤버 목록 조회        | 없음                                       | `members[]`              |
+| DELETE | `/api/v1/workspaces/{workspaceID}/members/{userID}`        | 멤버 제거           | 없음                                       | `message`                |
+| GET    | `/api/v1/invitations`                                      | 내가 받은 초대 목록 조회  | 없음                                       | `invitations[]`          |
+| POST   | `/api/v1/invitations/{invitationID}/accept`                | 초대 수락           | 없음                                       | `message`                |
+| POST   | `/api/v1/invitations/{invitationID}/reject`                | 초대 거절           | 없음                                       | `message`                |
+| POST   | `/api/v1/workspaces/{workspaceID}/blocks`                  | 아이디어 블록 생성      | `content`, `parentBlockID?`              | `block`                  |
+| GET    | `/api/v1/workspaces/{workspaceID}/blocks`                  | 블록 목록 조회        | 없음                                       | `blocks[]`               |
+| GET    | `/api/v1/blocks/{blockID}`                                 | 블록 상세 조회        | 없음                                       | `block`                  |
+| PATCH  | `/api/v1/blocks/{blockID}`                                 | 블록 수정           | `content`                                | `block`                  |
+| DELETE | `/api/v1/blocks/{blockID}`                                 | 블록 삭제           | 없음                                       | `message`                |
+| PATCH  | `/api/v1/blocks/{blockID}/parent`                          | 블록 연결/부모 변경     | `parentBlockID` 또는 `null`                | `block`                  |
+<!-- 이후부터 선택기능 -->
+| POST   | `/api/v1/blocks/{blockID}/comments`                        | 댓글 작성           | `content`                                | `comment`                |
+| GET    | `/api/v1/blocks/{blockID}/comments`                        | 댓글 목록 조회        | 없음                                       | `comments[]`             |
+| PATCH  | `/api/v1/comments/{commentID}`                             | 댓글 수정           | `content`, `solved?`                     | `comment`                |
+| DELETE | `/api/v1/comments/{commentID}`                             | 댓글 삭제           | 없음                                       | `message`                |
+| PATCH  | `/api/v1/comments/{commentID}/solved`                      | 댓글 해결 여부 변경     | `solved`                                 | `comment`                |
+| GET    | `/api/v1/workspaces/{workspaceID}/recommendations`         | 워크스페이스 기반 추천 조회 | `limit?`                                 | `recommendations[]`      |
+| GET    | `/api/v1/blocks/{blockID}/recommendations`                 | 블록 기반 추천 조회     | `limit?`                                 | `recommendations[]`      |
+| POST   | `/api/v1/workspaces/{workspaceID}/recommendations/apply`   | 추천을 블록으로 추가     | `content`, `parentBlockID?`              | `block`                  |
+| GET    | `/api/v1/workspaces/{workspaceID}/recommendation-settings` | 추천 우선순위 설정 조회   | 없음                                       | `settings`               |
+| PATCH  | `/api/v1/workspaces/{workspaceID}/recommendation-settings` | 추천 우선순위 설정 수정   | `creativity`, `feasibility`, `relevance` | `settings`               |
+
 
 ---
 
