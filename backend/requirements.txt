@@ -1,0 +1,9 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic-settings==2.9.1
+sqlalchemy[asyncio]==2.0.41
+asyncpg==0.30.0
+pgvector==0.4.1
+redis==6.1.0
+celery[redis]==5.5.2
+
