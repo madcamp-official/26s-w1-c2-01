@@ -21,7 +21,7 @@
 
 - **주제:** 온라인 브레인스토밍 협업 툴
 - **목적:** 웹 상에서 팀원들과 함께 자유롭게 의견을 나누고 브레인스토밍을 할 수 있도록 검색, 공유, 추천, 커스터마이징 등의 기능으로 사용자 보조
-- **핵심 컨셉:** 하나의 워크스페이스 = 하나의 브레인스토밍 캔버스. 루트 노드에서 시작해 팀원들이 함께 아이디어 블록을 트리 형태로 확장하며, 모든 변경사항은 **실시간으로 동기화**됨
+- **핵심 기능:** 하나의 워크스페이스 = 하나의 브레인스토밍 캔버스. 루트 노드에서 시작해 팀원들이 함께 아이디어 블록을 트리 형태로 확장하며, 모든 변경사항은 **실시간으로 동기화**됨
 - **예상 사용자:** Ideation이 필요한 학생, 직장인 등
 
 ---
@@ -159,8 +159,6 @@ erDiagram
 | root_block_id | FK(Block), nullable | 최초 루트 블록 |
 | created_at / updated_at | datetime | |
 
-> 원본 초안의 `creator`, `userID` 중복 FK를 제거하고, 다대다 관계는 아래 `WorkspaceMember`로 분리했습니다.
-
 **WorkspaceMember** *(신규)*
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -192,7 +190,7 @@ erDiagram
 | position_x / position_y | float | 캔버스 좌표 (드래그 이동용) |
 | created_at / updated_at | datetime | |
 
-**Comment** *(위치 기반으로 재설계)*
+**Comment**
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | id | PK | |
@@ -204,8 +202,6 @@ erDiagram
 | solved | boolean | |
 | created_at / updated_at | datetime | |
 
-> 기존엔 `/blocks/{blockID}/comments`로 블록에 종속되어 있었는데, "피그마처럼 원하는 영역에" 라는 요구사항과 맞지 않아 워크스페이스 캔버스 좌표 기반으로 변경했습니다.
-
 **RecommendationSetting**
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -214,8 +210,6 @@ erDiagram
 | search_trend_weight | float (0~1) | 관련검색어 기반 추천 가중치 |
 | semantic_weight | float (0~1) | 사전적 유사어 기반 추천 가중치 |
 | updated_at | datetime | |
-
-> 원안의 `creativity / feasibility / relevance`는 "창의성/실현가능성" 축이라 실제 설명하신 "관련검색어 vs 사전적 유사성" 추천 소스와 안 맞아서 두 축으로 단순화했습니다.
 
 ---
 
@@ -282,59 +276,6 @@ erDiagram
 | Endpoint | 설명 |
 |---|---|
 | `WS /api/v1/ws/workspaces/{workspaceId}` | 워크스페이스 단위 실시간 채널 (접속 시 JWT 인증) |
-
-**이벤트 타입** *(신규 정의)*
-
-| 이벤트 | 발생 시점 | 페이로드 |
-|---|---|---|
-| `block:created` | 블록 생성 | `block` |
-| `block:updated` | 내용/위치 수정 | `block` |
-| `block:reparented` | 재연결 | `block` |
-| `block:deleted` | 삭제 | `blockId` |
-| `comment:created` / `comment:resolved` / `comment:deleted` | 코멘트 CRUD | `comment` |
-| `recommendation:ready` | Celery 추천 작업 완료 | `blockId`, `recommendations[]` |
-| `member:joined` / `member:left` | 접속 상태 | `userId` |
-
----
-
-## 추천 기능 동작 흐름 *(신규 정의)*
-
-1. 사용자가 블록 생성(`POST /blocks`) → API는 즉시 블록을 반환하고, Celery에 추천 생성 태스크를 비동기로 위임
-2. Celery worker가 `RecommendationSetting`의 가중치를 참고해
-   - **관련검색어**: 검색 포털의 연관검색어/자동완성 API 호출
-   - **사전적 유사성**: 임베딩 모델 또는 유의어 사전 API로 유사어 계산
-   - 두 결과를 가중치 비율로 합산·정렬
-3. 결과를 Redis에 `block:{blockId}:recommendations` 키로 TTL 캐싱
-4. WebSocket으로 `recommendation:ready` 이벤트 브로드캐스트 → 프론트는 해당 블록 옆에 "추천 후보" 프리뷰 노드 표시
-5. 사용자가 후보 클릭 → `POST /blocks/{id}/recommendations/apply` → 실제 Block 레코드 생성 및 `block:created` 이벤트 브로드캐스트
-
-> 크롤링 대신, 시간이 촉박하다면 네이버 검색 API(연관검색어) + 사전 API(우리말샘/표준국어대사전) 같은 공식 API를 쓰는 걸 권장합니다. 직접 크롤러를 만들면 유지보수 비용이 커서 2인 팀 일정상 부담이 될 수 있습니다.
-
----
-
-## 기술 스택 추천
-
-기본 골격(FastAPI + PostgreSQL + Redis + Celery + WebSocket)은 이 프로젝트 구조와 잘 맞습니다. 역할을 명확히 하면:
-
-| 영역 | 스택 | 이유 |
-|---|---|---|
-| API 서버 | **FastAPI** (async) | Pydantic 스키마로 API 문서(`/docs`) 자동 생성, WebSocket 네이티브 지원 |
-| ORM / 마이그레이션 | **SQLAlchemy 2.0 (async) + Alembic** | 비동기 FastAPI와 궁합, 트리 구조는 `parent_block_id` self-FK로 충분 (재귀 CTE로 서브트리 조회) |
-| DB | **PostgreSQL** | 관계형 구조(User-Workspace-Block-Comment)에 적합, `recursive CTE`로 블록 트리 조회 용이 |
-| 캐시/큐 | **Redis** | (1) Celery 브로커/백엔드 (2) 추천 결과 TTL 캐싱 (3) 다중 서버 확장 시 WebSocket pub/sub 백본 |
-| 비동기 작업 | **Celery** | 추천 생성(외부 API 호출 포함)을 요청-응답 흐름에서 분리, 완료 시 WebSocket으로 push |
-| 실시간 동기화 | **WebSocket** (FastAPI native) | 블록 CRUD·코멘트·추천·접속상태 모두 양방향이 필요해 SSE보다 WebSocket 단일화 권장. SSE는 별도로 안 써도 무방 |
-| 인증 | **JWT (access + refresh) + passlib(bcrypt)** | ID/PW 로그인, 토큰 기반 stateless 인증 |
-| 프론트엔드 | **React + TypeScript** | |
-| 캔버스/노드 UI | **React Flow** | 드래그 가능한 노드-엣지 그래프를 직접 구현하지 않아도 됨, 블록 트리 시각화에 최적 |
-| 상태관리 | **Zustand** (또는 Redux Toolkit) | 실시간 이벤트로 자주 갱신되는 캔버스 상태 관리에 가벼움 |
-| 스타일 | **TailwindCSS** | |
-| 배포 | **Docker Compose** (FastAPI + Postgres + Redis + Celery worker) → Railway/Render/Fly.io 또는 단일 VM | 2인 팀 일정상 K8s 등 과설계는 지양, Compose로 로컬/배포 환경 일치 |
-
-**보완 제안**
-- `python-jose` 또는 `pyjwt`로 JWT 발급, `passlib[bcrypt]`로 비밀번호 해싱
-- 블록 트리가 커질 경우 `GET /workspaces/{id}/blocks`는 PostgreSQL `WITH RECURSIVE` CTE로 서브트리 통째로 조회
-- WebSocket 연결 관리는 workspace_id 별 Connection Manager(딕셔너리)로 단일 서버 기준 구현 → 추후 다중 서버 확장 시 Redis Pub/Sub으로 브로드캐스트 전환
 
 ---
 
