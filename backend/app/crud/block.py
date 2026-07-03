@@ -78,6 +78,21 @@ async def update_block_parent(db: AsyncSession, block: Block, new_parent_id: int
     return block
 
 
+async def get_subtree_block_ids(db: AsyncSession, block_id: int) -> list[int]:
+    """block_id 자신 + 모든 하위 서브트리의 id 목록"""
+    all_ids = [block_id]
+    frontier = [block_id]
+    while frontier:
+        stmt = select(Block.id).where(Block.parent_block_id.in_(frontier))
+        result = await db.execute(stmt)
+        children = [row[0] for row in result.all()]
+        if not children:
+            break
+        all_ids.extend(children)
+        frontier = children
+    return all_ids
+
+
 async def delete_block(db: AsyncSession, block: Block) -> None:
     # 하위 서브트리는 DB의 ON DELETE CASCADE(parent_block_id FK)가 알아서 정리
     await db.delete(block)

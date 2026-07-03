@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.block_deps import get_block_and_check_membership, require_block_write_access
+from app.core.connection_manager import manager
 from app.core.deps import get_current_user
+from app.core.events import block_deleted_event, block_event
 from app.core.mindmap_deps import get_mindmap_and_check_membership, require_mindmap_write_access
 from app.crud.block import (
     create_block,
     delete_block,
     get_block,
+    get_subtree_block_ids,
     list_blocks_by_map,
     update_block_content,
     update_block_parent,
@@ -49,7 +52,7 @@ async def create(
 
     color = body.color or parent.color    # 색상 미지정 시 부모 색상 상속
 
-    return await create_block(
+    block = await create_block(
         db,
         map_id=mindmap.id,
         parent_block_id=body.parent_block_id,
@@ -59,6 +62,8 @@ async def create(
         position_x=body.position_x,
         position_y=body.position_y,
     )
+    await manager.broadcast(mindmap.id, block_event("block:created", block))
+    return block
 
 
 @router.get("/maps/{map_id}/blocks", response_model=list[BlockPublic])
@@ -81,7 +86,9 @@ async def update_content(
     db: AsyncSession = Depends(get_db),
     block: Block = Depends(require_block_write_access),
 ):
-    return await update_block_content(db, block, content=body.content, color=body.color)
+    updated = await update_block_content(db, block, content=body.content, color=body.color)
+    await manager.broadcast(updated.map_id, block_event("block:updated", updated))
+    return updated
 
 
 @router.patch("/blocks/{block_id}/position", response_model=BlockPublic)
@@ -90,7 +97,9 @@ async def update_position(
     db: AsyncSession = Depends(get_db),
     block: Block = Depends(require_block_write_access),
 ):
-    return await update_block_position(db, block, body.position_x, body.position_y)
+    updated = await update_block_position(db, block, body.position_x, body.position_y)
+    await manager.broadcast(updated.map_id, block_event("block:updated", updated))
+    return updated
 
 
 @router.patch("/blocks/{block_id}/parent", response_model=BlockPublic)
@@ -115,7 +124,9 @@ async def update_parent(
             detail="자기 자신의 하위 블록을 부모로 지정할 수 없습니다 (트리에 사이클이 생깁니다)",
         )
 
-    return await update_block_parent(db, block, body.parent_block_id)
+    updated = await update_block_parent(db, block, body.parent_block_id)
+    await manager.broadcast(updated.map_id, block_event("block:reparented", updated))
+    return updated
 
 
 @router.delete("/blocks/{block_id}")
@@ -126,5 +137,9 @@ async def delete(
     if block.parent_block_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="루트 블록은 삭제할 수 없습니다")
 
+    map_id = block.map_id
+    deleted_ids = await get_subtree_block_ids(db, block.id)  # 삭제 전에 미리 수집
+
     await delete_block(db, block)
+    await manager.broadcast(map_id, block_deleted_event(deleted_ids))
     return {"message": "블록이 삭제되었습니다 (하위 블록 포함)"}
