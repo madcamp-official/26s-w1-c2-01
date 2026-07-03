@@ -9,6 +9,7 @@ celery[redis]==5.5.2
 
 alembic==1.14.0    # for migration
 passlib[bcrypt]==1.7.4    # for password hashing
+bcrypt==4.0.1
 python-jose[cryptography]==3.3.0    # for JWT
 python-multipart==0.0.20    # for FastAPI form parsing
 
