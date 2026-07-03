@@ -1,5 +1,7 @@
 from app.models.block import Block
+from app.models.comment import Comment
 from app.schemas.block import BlockPublic
+from app.schemas.comment import CommentPublic
 
 
 def block_event(event_type: str, block: Block) -> dict:
@@ -16,3 +18,15 @@ def block_event(event_type: str, block: Block) -> dict:
 def block_deleted_event(block_ids: list[int]) -> dict:
     """block:deleted 이벤트, 하위 서브트리 전체가 cascade로 같이 지워지므로 배열로 내려줌"""
     return {"type": "block:deleted", "blockIds": block_ids}
+
+
+def comment_event(event_type: str, comment: Comment) -> dict:
+    """comment:created / comment:updated / comment:resolved / comment:reopened 이벤트 페이로드"""
+    return {
+        "type": event_type,
+        "comment": CommentPublic.model_validate(comment).model_dump(mode="json"),
+    }
+
+
+def comment_deleted_event(comment_id: int, block_id: int) -> dict:
+    return {"type": "comment:deleted", "commentId": comment_id, "blockId": block_id}
