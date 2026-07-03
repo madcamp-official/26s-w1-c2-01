@@ -12,8 +12,8 @@
 
 | 이름 | GitHub | 역할 |
 |---|---|---|
-|양우현|hyun020215(https://github.com/hyun020215)|  |
-|김경원|kkw610(https://github.com/kkw610)|  |
+|양우현|[@hyun020215](https://github.com/hyun020215)|  |
+|김경원|[@kkw610](https://github.com/kkw610)|  |
 
 ---
 
