@@ -14,4 +14,6 @@ class MindMap(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
-    root_block_id: Mapped[int | None] = mapped_column(nullable=True, default=None)
+    root_block_id: Mapped[int | None] = mapped_column(
+        ForeignKey("blocks.id", ondelete="SET NULL"), nullable=True, default=None
+    )

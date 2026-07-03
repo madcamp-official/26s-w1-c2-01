@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user
 from app.core.mindmap_deps import get_mindmap_and_check_membership, require_mindmap_write_access
 from app.core.workspace_deps import get_current_membership, require_write_access
+from app.crud.block import count_blocks_grouped_by_map
 from app.crud.mindmap import create_mindmap, delete_mindmap, list_mindmaps, update_mindmap_name
 from app.db import get_db
 from app.models.mindmap import MindMap
@@ -36,7 +37,7 @@ async def list_by_workspace(
     _membership: WorkspaceMember = Depends(get_current_membership),
 ):
     mindmaps = await list_mindmaps(db, workspace_id)
-    # node_count를 blocks 테이블 기준 실제 COUNT 쿼리로 교체
+    counts = await count_blocks_grouped_by_map(db, [m.id for m in mindmaps])
     return [
         MindMapListItem(
             id=m.id,
@@ -46,7 +47,7 @@ async def list_by_workspace(
             created_by=m.created_by,
             created_at=m.created_at,
             updated_at=m.updated_at,
-            node_count=0,
+            node_count=counts.get(m.id, 0),
         )
         for m in mindmaps
     ]
