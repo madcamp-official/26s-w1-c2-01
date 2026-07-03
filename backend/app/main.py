@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,12 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import settings
+from app.core.recommendation_listener import listen_for_recommendations
 from app.db import engine
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    listener_task = asyncio.create_task(listen_for_recommendations())
     yield
+    listener_task.cancel()
     await engine.dispose()
 
 

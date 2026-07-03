@@ -28,6 +28,7 @@ from app.schemas.block import (
     BlockPublic,
     BlockUpdate,
 )
+from app.worker import celery_app
 
 router = APIRouter(tags=["blocks"])
 
@@ -63,6 +64,8 @@ async def create(
         position_y=body.position_y,
     )
     await manager.broadcast(mindmap.id, block_event("block:created", block))
+    # 새 블록이 생겼으니, 이 블록을 기반으로 한 추천을 비동기로 생성 시작
+    celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
     return block
 
 

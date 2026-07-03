@@ -1,0 +1,59 @@
+import httpx
+
+
+async def fetch_related_search_terms(query: str, limit: int = 5) -> list[str]:
+    """관련검색어 후보를 외부 자동완성 API에서 가져옴"""
+    url = "https://duckduckgo.com/ac/"
+    params = {"q": query, "kl": "kr-kr"}
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+    except (httpx.HTTPError, ValueError):
+        # 외부 API가 잠깐 죽어도 추천 기능 전체가 죽으면 안 되므로, 빈 리스트로 조용히 폴백
+        return []
+
+    terms = [item["phrase"] for item in data if isinstance(item, dict) and "phrase" in item]
+    return terms[:limit]
+
+
+def merge_recommendations(
+    semantic_candidates: list[dict],
+    search_terms: list[str],
+    *,
+    semantic_weight: float,
+    search_weight: float,
+    limit: int = 6,
+) -> list[dict]:
+    """사전적 유사성 후보 + 관련검색어 후보를 가중치로 합산해서 하나의 순위 목록으로 만듦"""
+    scores: dict[str, float] = {}
+    display: dict[str, str] = {}
+    source: dict[str, str] = {}
+
+    for candidate in semantic_candidates:
+        key = candidate["content"].strip().lower()
+        if not key:
+            continue
+        scores[key] = scores.get(key, 0.0) + candidate["score"] * semantic_weight
+        display.setdefault(key, candidate["content"].strip())
+        source.setdefault(key, "semantic")
+
+    total_terms = max(len(search_terms), 1)
+    for rank, term in enumerate(search_terms):
+        term = term.strip()
+        key = term.lower()
+        if not key:
+            continue
+        rank_score = max(0.0, 1 - rank / total_terms)
+        scores[key] = scores.get(key, 0.0) + rank_score * search_weight
+        display.setdefault(key, term)
+        source.setdefault(key, "search")
+
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [
+        {"content": display[key], "score": round(value, 4), "source": source[key]}
+        for key, value in ranked
+        if value > 0
+    ]
