@@ -12,8 +12,8 @@
 
 | 이름 | GitHub | 역할 |
 |---|---|---|
-|양우현|hyun020215|  |
-|김경원|kkw610|  |
+|양우현|hyun020215(https://github.com/hyun020215)|  |
+|김경원|kkw610(https://github.com/kkw610)|  |
 
 ---
 
@@ -41,7 +41,7 @@
 
 - [ ] 자동 추천 (관련검색어 기반 / 사전적 유사어 기반)
 - [ ] 추천 우선순위 커스터마이징 (검색어 가중치 vs 유사어 가중치)
-- [ ] 피그마식 위치 기반 코멘트 (캔버스 좌표에 메모 핀 남기기, 해결 처리)
+- [ ] 워크스페이스(캔버스) 단위 코멘트, 해결 처리
 
 ---
 
@@ -51,7 +51,7 @@
 
 - 로그인/회원가입 페이지
 - 워크스페이스 목록/초대함 페이지
-- 브레인스토밍 캔버스 페이지 (블록 트리 + 코멘트 핀 + 추천 패널)
+- 브레인스토밍 캔버스 페이지
 
 <!-- Figma 링크 또는 이미지 첨부 -->
 
@@ -125,8 +125,6 @@ erDiagram
         int author_id FK
         int linked_block_id FK
         string content
-        float position_x
-        float position_y
         boolean solved
         datetime created_at
         datetime updated_at
@@ -160,7 +158,9 @@ erDiagram
 | root_block_id | FK(Block), nullable | 최초 루트 블록 |
 | created_at / updated_at | datetime | |
 
-**WorkspaceMember**
+> 원본 초안의 `creator`, `userID` 중복 FK를 제거하고, 다대다 관계는 아래 `WorkspaceMember`로 분리했습니다.
+
+**WorkspaceMember** *(신규)*
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | id | PK | |
@@ -169,7 +169,7 @@ erDiagram
 | role | string | owner / member |
 | joined_at | datetime | |
 
-**Invitation**
+**Invitation** *(신규 — API 문서엔 있었으나 스키마 누락)*
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | id | PK | |
@@ -196,11 +196,10 @@ erDiagram
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | id | PK | |
-| workspace_id | FK(Workspace) | 캔버스 단위로 소속 |
+| workspace_id | FK(Workspace) | 어느 브레인스토밍 트리(캔버스)에 대한 댓글인지 |
 | author_id | FK(User) | |
-| linked_block_id | FK(Block), nullable | 특정 블록 근처에 달린 경우만 참조 |
+| linked_block_id | FK(Block), nullable | 특정 블록에 대한 댓글이면 참조 (선택사항, 사이드바에서 "N번 블록에 대한 댓글"처럼 표시 가능) |
 | content | string | |
-| position_x / position_y | float | 캔버스 상 코멘트 핀 좌표 |
 | solved | boolean | |
 | created_at / updated_at | datetime | |
 
@@ -260,8 +259,8 @@ erDiagram
 ### Comment *(선택 기능)*
 | Method | Endpoint | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
-| POST | `/api/v1/workspaces/{workspaceId}/comments` | 코멘트 생성 | `content`, `positionX`, `positionY`, `linkedBlockId?` | `comment` |
-| GET | `/api/v1/workspaces/{workspaceId}/comments` | 코멘트 목록 | 없음 | `comments[]` |
+| POST | `/api/v1/workspaces/{workspaceId}/comments` | 코멘트 생성 | `content`, `linkedBlockId?` | `comment` |
+| GET | `/api/v1/workspaces/{workspaceId}/comments` | 코멘트 목록 (사이드바용, 최신순) | `solved?` (필터) | `comments[]` |
 | PATCH | `/api/v1/comments/{commentId}` | 수정 | `content` | `comment` |
 | PATCH | `/api/v1/comments/{commentId}/solved` | 해결 여부 변경 | `solved` | `comment` |
 | DELETE | `/api/v1/comments/{commentId}` | 삭제 | 없음 | `message` |
