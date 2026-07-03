@@ -283,6 +283,7 @@ erDiagram
 ### Block
 
 > 블록 좌표와 자동 정렬 결과는 사용자별 프론트엔드 로컬 상태이며 서버나 WebSocket으로 공유하지 않는다. 서버는 블록 내용과 `parent_block_id` 연결 관계만 저장·동기화한다.
+
 | Method | Endpoint | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
 | POST | `/api/v1/maps/{mapId}/blocks` | 블록 생성 | `content`, `parentBlockId`, `color?` | `block` |
