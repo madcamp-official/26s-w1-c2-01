@@ -1,0 +1,17 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic-settings==2.9.1
+sqlalchemy[asyncio]==2.0.41
+asyncpg==0.30.0
+pgvector==0.4.1
+redis==5.3.1
+celery[redis]==5.5.2
+
+alembic==1.14.0    # for migration
+passlib[bcrypt]==1.7.4    # for password hashing
+python-jose[cryptography]==3.3.0    # for JWT
+python-multipart==0.0.20    # for FastAPI form parsing
+
+httpx==0.28.1   # for auto-recommendation
+
+sentence-transformers==3.3.1    # for setence embedding
