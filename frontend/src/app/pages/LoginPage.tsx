@@ -1,7 +1,7 @@
 import { LoginScreen } from "../MindSpaceScreens";
 
 export interface LoginPageProps {
-  onLogin: (name: string, email: string) => void;
+  onLogin: (name: string, email: string, password: string, isSignUp: boolean) => Promise<void>;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {

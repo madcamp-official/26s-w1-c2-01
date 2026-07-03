@@ -125,8 +125,6 @@ erDiagram
         string content
         string source_type
         string color
-        float position_x
-        float position_y
         datetime created_at
         datetime updated_at
     }
@@ -206,7 +204,6 @@ erDiagram
 | content | string | 아이디어 워딩 (프론트 `NodeData.text`) |
 | source_type | string | manual / recommended |
 | color | enum(string) | 8가지 프리셋, 기본값 `indigo` |
-| position_x / position_y | float | 캔버스 좌표 (프론트 `NodeData.x/y`) |
 | created_at / updated_at | datetime | |
 
 > **색상 프리셋**
@@ -284,13 +281,14 @@ erDiagram
 | DELETE | `/api/v1/maps/{mapId}` | 삭제 (하위 블록/댓글 전부 cascade) | 없음 | `message` |
 
 ### Block
+
+> 블록 좌표와 자동 정렬 결과는 사용자별 프론트엔드 로컬 상태이며 서버나 WebSocket으로 공유하지 않는다. 서버는 블록 내용과 `parent_block_id` 연결 관계만 저장·동기화한다.
 | Method | Endpoint | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
-| POST | `/api/v1/maps/{mapId}/blocks` | 블록 생성 | `content`, `parentBlockId`, `positionX`, `positionY`, `color?` | `block` |
+| POST | `/api/v1/maps/{mapId}/blocks` | 블록 생성 | `content`, `parentBlockId`, `color?` | `block` |
 | GET | `/api/v1/maps/{mapId}/blocks` | 마인드맵 전체 블록 트리 조회 | 없음 | `blocks[]` |
 | GET | `/api/v1/blocks/{blockId}` | 블록 상세 | 없음 | `block` |
 | PATCH | `/api/v1/blocks/{blockId}` | 내용/색상 수정 | `content?`, `color?` | `block` |
-| PATCH | `/api/v1/blocks/{blockId}/position` | 위치 이동 | `positionX`, `positionY` | `block` |
 | PATCH | `/api/v1/blocks/{blockId}/parent` | 연결/부모 변경 | `parentBlockId` | `block` |
 | DELETE | `/api/v1/blocks/{blockId}` | 삭제 (하위 서브트리 전체 cascade, 루트 블록은 삭제 불가) | 없음 | `message` |
 

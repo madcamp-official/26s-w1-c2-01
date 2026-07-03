@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 14
 
     # 프론트엔드 연동용 CORS 허용 origin
-    cors_allow_origins: str = "http://localhost:3000"
+    cors_allow_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

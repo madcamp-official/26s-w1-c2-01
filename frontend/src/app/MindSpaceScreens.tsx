@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { api, ApiBlock, ApiComment } from "../api/client";
 import {
   Plus, Share2, Check, X, Copy, ArrowLeft, ZoomIn, ZoomOut,
   Trash2, Brain, LogOut, Link2, Globe, Bell, ChevronRight,
@@ -11,15 +12,15 @@ import {
 
 type Role = "owner" | "editor" | "viewer";
 
-interface MemberData {
+export interface MemberData {
   id: string; name: string; email: string;
-  role: Role; initials: string; color: string;
+  role: Role; initials: string; color: string; userId?: number;
 }
 export interface MapData { id: string; name: string; nodeCount: number; updatedAt: string; }
-export interface WorkspaceData { id: string; name: string; members: MemberData[]; maps: MapData[]; }
-interface NodeData { id: string; text: string; x: number; y: number; color: string; parentId: string | null; }
+export interface WorkspaceData { id: string; name: string; members: MemberData[]; maps: MapData[]; ownerId?: number; currentRole?: Role; }
+export interface NodeData { id: string; text: string; x: number; y: number; color: string; parentId: string | null; }
 interface EdgeData { from: string; to: string; }
-interface CommentData { id: string; nodeId: string; author: string; content: string; solved: boolean; }
+interface CommentData { id: string; nodeId: string; authorId?: number; author: string; content: string; solved: boolean; }
 
 // ─── Static data ────────────────────────────────────────────────────────────
 
@@ -72,17 +73,50 @@ const INIT_COMMENTS: CommentData[] = [
   { id: "comment-2", nodeId: "n1", author: "Jordan Lee", content: "성장 지표를 신규 사용자와 기존 사용자로 나눠서 확인해 보면 어떨까요?", solved: false },
   { id: "comment-3", nodeId: "n1", author: "Maya Patel", content: "지난 회의에서 논의한 실험 결과를 반영했습니다.", solved: true },
   { id: "comment-4", nodeId: "n2", author: "Sarah Kim", content: "리텐션 기준 기간을 7일과 30일로 함께 표시해 주세요.", solved: false },
+  { id: "comment-5", nodeId: "root", authorId: 1, author: "Alex Chen", content: "목표 문구를 조금 더 구체적으로 다듬어 보겠습니다.", solved: false },
 ];
+
+const API_COLOR_HEX: Record<string, string> = {
+  indigo: "#6366f1", violet: "#8b5cf6", cyan: "#06b6d4", emerald: "#10b981",
+  amber: "#f59e0b", red: "#ef4444", pink: "#ec4899", blue: "#3b82f6",
+};
+const HEX_API_COLOR = Object.fromEntries(Object.entries(API_COLOR_HEX).map(([name, hex]) => [hex, name]));
+
+function blocksToLocalNodes(blocks: ApiBlock[]): NodeData[] {
+  const byParent = new Map<number | null, ApiBlock[]>();
+  blocks.forEach(block => byParent.set(block.parent_block_id, [...(byParent.get(block.parent_block_id) ?? []), block]));
+  const result: NodeData[] = [];
+  const place = (block: ApiBlock, depth: number, index: number, siblings: number) => {
+    result.push({
+      id: String(block.id), parentId: block.parent_block_id === null ? null : String(block.parent_block_id),
+      text: block.content, color: API_COLOR_HEX[block.color] ?? API_COLOR_HEX.indigo,
+      // TODO(local-layout): 좌표는 서버 공유 대상이 아니므로 사용자별 로컬 레이아웃으로 계산한다.
+      x: 600 + depth * 250, y: 370 + (index - (siblings - 1) / 2) * 120,
+    });
+    const children = byParent.get(block.id) ?? [];
+    children.forEach((child, childIndex) => place(child, depth + 1, childIndex, children.length));
+  };
+  const roots = byParent.get(null) ?? [];
+  roots.forEach((root, index) => place(root, 0, index, roots.length));
+  return result;
+}
+
+const apiCommentToLocal = (comment: ApiComment): CommentData => ({
+  id: String(comment.id), nodeId: String(comment.block_id), authorId: comment.author.id,
+  author: comment.author.name, content: comment.content, solved: comment.solved,
+});
 
 const genId = () => `node-${crypto.randomUUID()}`;
 
 // ─── Login Screen ───────────────────────────────────────────────────────────
 
-export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string) => void }) {
+export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string, password: string, isSignUp: boolean) => Promise<void> | void }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName]         = useState("Alex Chen");
   const [email, setEmail]       = useState("alex@acme.com");
   const [password, setPassword] = useState("password");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const inp = [
     "w-full px-4 py-3 rounded-xl border border-[#E0DFE0] bg-white",
@@ -198,11 +232,18 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
                 onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
             </div>
 
+            {error && <p className="text-xs text-red-500">{error}</p>}
             <button
-              onClick={() => onLogin(isSignUp ? name : "Alex Chen", email)}
-              className="w-full py-3 bg-[#0D0D14] hover:bg-[#1e1e2e] text-white rounded-xl text-sm font-semibold transition-colors mt-1"
+              onClick={async () => {
+                setSubmitting(true); setError("");
+                try { await onLogin(name, email, password, isSignUp); }
+                catch (reason) { setError(reason instanceof Error ? reason.message : "로그인에 실패했습니다"); }
+                finally { setSubmitting(false); }
+              }}
+              disabled={submitting}
+              className="w-full py-3 bg-[#0D0D14] hover:bg-[#1e1e2e] text-white rounded-xl text-sm font-semibold transition-colors mt-1 disabled:opacity-50"
             >
-              {isSignUp ? "계정 만들기" : "로그인 →"}
+              {submitting ? "처리 중..." : isSignUp ? "계정 만들기" : "로그인 →"}
             </button>
           </div>
 
@@ -238,18 +279,26 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
 // ─── Workspace Screen ────────────────────────────────────────────────────────
 
 export function WorkspaceScreen({
-  user, onOpenCanvas, onViewInvitation, onLogout,
+  user, onOpenCanvas, onViewInvitation, onLogout, initialWorkspaces = WORKSPACES, onMemberRoleChange,
 }: {
-  user: { name: string; email: string };
+  user: { id?: number; name: string; email: string };
   onOpenCanvas: (ws: WorkspaceData, map: MapData) => void;
   onViewInvitation: () => void;
   onLogout: () => void;
+  initialWorkspaces?: WorkspaceData[];
+  onMemberRoleChange?: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
 }) {
-  const [workspaces, setWorkspaces] = useState<WorkspaceData[]>(WORKSPACES);
-  const [activeId, setActiveId]     = useState("ws1");
+  const [workspaces, setWorkspaces] = useState<WorkspaceData[]>(initialWorkspaces);
+  const [activeId, setActiveId]     = useState(initialWorkspaces[0]?.id ?? "ws1");
   const [showShare, setShowShare]   = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateMap, setShowCreateMap] = useState(false);
+  const [roleChange, setRoleChange] = useState<{ member: MemberData; role: "editor" | "viewer" } | null>(null);
+
+  useEffect(() => {
+    setWorkspaces(initialWorkspaces);
+    if (!initialWorkspaces.some(item => item.id === activeId)) setActiveId(initialWorkspaces[0]?.id ?? "");
+  }, [initialWorkspaces]);
 
   const ws = workspaces.find(w => w.id === activeId) ?? workspaces[0];
   const initials = user.name.split(" ").map(n => n[0]).join("");
@@ -382,9 +431,14 @@ export function WorkspaceScreen({
                   <p className="text-sm font-semibold text-[#0D0D14] truncate">{m.name}</p>
                   <p className="text-[11px] text-[#717182] truncate">{m.email}</p>
                 </div>
-                <span className="text-[10px] font-semibold text-[#717182]">
+                {ws.currentRole === "owner" && m.role !== "owner" ? (
+                  <select value={m.role} onChange={event => setRoleChange({ member: m, role: event.target.value as "editor" | "viewer" })}
+                    className="rounded-lg border border-[#E0DFE0] bg-white px-2 py-1 text-[10px] font-semibold text-[#717182]">
+                    <option value="editor">편집자</option><option value="viewer">뷰어</option>
+                  </select>
+                ) : <span className="text-[10px] font-semibold text-[#717182]">
                   {m.role === "owner" ? "소유자" : m.role === "editor" ? "편집자" : "뷰어"}
-                </span>
+                </span>}
               </div>
             ))}
           </div>
@@ -395,9 +449,11 @@ export function WorkspaceScreen({
       {showCreate && (
         <CreateWorkspaceModal
           onClose={() => setShowCreate(false)}
-          onCreate={wname => {
+          onCreate={async wname => {
+            const created = await api.createWorkspace(wname).catch(() => null);
             const nw: WorkspaceData = {
-              id: `ws-${Date.now()}`, name: wname,
+              id: created ? String(created.id) : `ws-${Date.now()}`, name: wname,
+              ownerId: created?.owner_id, currentRole: "owner",
               members: [{ id: "m1", name: user.name, email: user.email, role: "owner",
                 initials: user.name.split(" ").map(n => n[0]).join(""), color: "#6366f1" }],
               maps: [],
@@ -411,9 +467,10 @@ export function WorkspaceScreen({
       {showCreateMap && (
         <CreateMindMapModal
           onClose={() => setShowCreateMap(false)}
-          onCreate={mapName => {
+          onCreate={async mapName => {
+            const created = /^\d+$/.test(ws.id) ? await api.createMap(Number(ws.id), mapName).catch(() => null) : null;
             const map: MapData = {
-              id: `map-${Date.now()}`,
+              id: created ? String(created.id) : `map-${Date.now()}`,
               name: mapName,
               nodeCount: 1,
               updatedAt: "방금",
@@ -422,6 +479,21 @@ export function WorkspaceScreen({
             setWorkspaces(prev => prev.map(item => item.id === ws.id ? updatedWorkspace : item));
             setShowCreateMap(false);
             onOpenCanvas(updatedWorkspace, map);
+          }}
+        />
+      )}
+      {roleChange && (
+        <ConfirmModal
+          title="멤버 역할을 변경할까요?"
+          description={`${roleChange.member.name}님의 역할을 ${roleChange.role === "editor" ? "편집자" : "뷰어"}(으)로 변경합니다.`}
+          confirmLabel="변경"
+          onCancel={() => setRoleChange(null)}
+          onConfirm={async () => {
+            await onMemberRoleChange?.(ws.id, roleChange.member, roleChange.role);
+            setWorkspaces(prev => prev.map(item => item.id !== ws.id ? item : {
+              ...item, members: item.members.map(member => member.id === roleChange.member.id ? { ...member, role: roleChange.role } : member),
+            }));
+            setRoleChange(null);
           }}
         />
       )}
@@ -613,6 +685,31 @@ function CreateMindMapModal({ onClose, onCreate }: {
               만들기
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({ title, description, confirmLabel, onCancel, onConfirm }: {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: () => Promise<void> | void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-[#E8E7EA] bg-white p-6 shadow-2xl">
+        <h3 className="text-lg font-semibold text-[#0D0D14]">{title}</h3>
+        <p className="mt-2 text-sm leading-relaxed text-[#717182]">{description}</p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-xl border border-[#E0DFE0] px-4 py-2 text-sm font-medium text-[#717182]">취소</button>
+          <button disabled={submitting} onClick={async () => { setSubmitting(true); try { await onConfirm(); } finally { setSubmitting(false); } }}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {submitting ? "변경 중..." : confirmLabel}
+          </button>
         </div>
       </div>
     </div>
@@ -856,11 +953,14 @@ function relaxNodeCollisions(input: NodeData[], pinnedIds = new Set<string>()): 
 }
 
 export function CanvasScreen({
-  workspace, mapName, userInitials, onBack,
+  workspace, mapId, mapName, userInitials, currentUserId, currentRole = workspace.currentRole ?? "editor", onBack,
 }: {
   workspace: WorkspaceData;
+  mapId: string;
   mapName: string;
   userInitials: string;
+  currentUserId?: number;
+  currentRole?: Role;
   onBack: () => void;
 }) {
   const [nodes, setNodes]       = useState<NodeData[]>(() =>
@@ -884,6 +984,7 @@ export function CanvasScreen({
   const [isZoomAnimating, setIsZoomAnimating] = useState(false);
   const [panelMode, setPanelMode] = useState<"controls" | "comments">("controls");
   const [comments, setComments] = useState<CommentData[]>(INIT_COMMENTS);
+  const canEditMap = currentRole === "owner" || currentRole === "editor";
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef     = useRef<DragState>({ type: "idle", nodeId: null, startPointer: { x: 0, y: 0 }, startValue: { x: 0, y: 0 }, moved: false });
@@ -904,6 +1005,23 @@ export function CanvasScreen({
     if (recommendationAcceptRef.current) clearTimeout(recommendationAcceptRef.current);
     if (recommendationCommitRef.current) clearTimeout(recommendationCommitRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!/^\d+$/.test(mapId)) return; // 더미 마인드맵은 기존 로컬 데이터 유지
+    api.listBlocks(Number(mapId)).then(blocks => {
+      const loaded = blocksToLocalNodes(blocks);
+      if (!loaded.length) return;
+      setNodes(loaded); nodesRef.current = loaded;
+      setEdges(loaded.filter(node => node.parentId).map(node => ({ from: node.parentId!, to: node.id })));
+    }).catch(() => { /* TODO: 전역 API 오류 UI */ });
+  }, [mapId]);
+
+  useEffect(() => {
+    if (!selectedId || !/^\d+$/.test(selectedId)) return;
+    api.listComments(Number(selectedId)).then(items => {
+      setComments(prev => [...prev.filter(comment => comment.nodeId !== selectedId), ...items.map(apiCommentToLocal)]);
+    }).catch(() => { /* 더미 댓글 유지 */ });
+  }, [selectedId]);
 
   // Native wheel listener (passive: false required for preventDefault)
   useEffect(() => {
@@ -1002,6 +1120,7 @@ export function CanvasScreen({
   // ── Edit ──
 
   const startEdit = (nodeId: string) => {
+    if (!canEditMap) return;
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
     setEditingId(nodeId);
@@ -1012,16 +1131,25 @@ export function CanvasScreen({
 
   const commitEdit = () => {
     if (!editingId) return;
-    setNodes(prev => prev.map(n => n.id === editingId ? { ...n, text: editText.trim() || n.text } : n));
+    const content = editText.trim();
+    setNodes(prev => prev.map(n => n.id === editingId ? { ...n, text: content || n.text } : n));
+    if (content && /^\d+$/.test(editingId)) api.updateBlock(Number(editingId), { content }).catch(() => { /* TODO: optimistic rollback/toast */ });
     setEditingId(null);
   };
 
   // ── Add child ──
 
-  const addChild = (parentId: string) => {
+  const addChild = async (parentId: string) => {
+    if (!canEditMap) return;
     const parent = nodes.find(n => n.id === parentId)!;
     const siblings = nodes.filter(n => n.parentId === parentId);
-    const newId = genId();
+    let newId = genId();
+    if (/^\d+$/.test(mapId) && /^\d+$/.test(parentId)) {
+      try {
+        const created = await api.createBlock(Number(mapId), "새 아이디어", Number(parentId), HEX_API_COLOR[parent.color]);
+        newId = String(created.id);
+      } catch { return; }
+    }
     const newNode: NodeData = {
       id: newId,
       text: "새 아이디어",
@@ -1040,6 +1168,7 @@ export function CanvasScreen({
   // ── Delete ──
 
   const deleteNode = (nodeId: string) => {
+    if (!canEditMap) return;
     if (nodeId === "root") return;
     const toDelete = new Set<string>();
     const collect = (id: string) => {
@@ -1050,6 +1179,7 @@ export function CanvasScreen({
     setNodes(prev => prev.filter(n => !toDelete.has(n.id)));
     setEdges(prev => prev.filter(e => !toDelete.has(e.from) && !toDelete.has(e.to)));
     setSelectedId(null);
+    if (/^\d+$/.test(nodeId)) api.deleteBlock(Number(nodeId)).catch(() => { /* TODO: optimistic rollback/toast */ });
   };
 
   const requestDelete = (nodeId: string) => {
@@ -1059,7 +1189,9 @@ export function CanvasScreen({
   // ── Color ──
 
   const changeColor = (nodeId: string, color: string) => {
+    if (!canEditMap) return;
     setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, color } : n));
+    if (/^\d+$/.test(nodeId)) api.updateBlock(Number(nodeId), { color: HEX_API_COLOR[color] }).catch(() => { /* TODO: optimistic rollback/toast */ });
   };
 
   const autoArrangeChildren = (parentId: string) => {
@@ -1176,7 +1308,7 @@ export function CanvasScreen({
   };
 
   const acceptRecommendation = (item: RecommendationItem) => {
-    if (!recommendationSource || acceptingRecommendationId) return;
+    if (!canEditMap || !recommendationSource || acceptingRecommendationId) return;
     const parentId = recommendationSource.id;
     setAcceptingRecommendationId(item.id);
 
@@ -1285,14 +1417,14 @@ export function CanvasScreen({
         <div className="w-12 flex flex-col items-center py-4 gap-2.5 flex-shrink-0 border-r border-[#E8E7EA] bg-white">
           <ToolBtn
             onClick={() => selectedId && addChild(selectedId)}
-            disabled={!selectedId}
+            disabled={!selectedId || !canEditMap}
             title="하위 노드 추가"
             active>
             <Plus className="w-4 h-4 text-indigo-600" />
           </ToolBtn>
           <ToolBtn
             onClick={() => selectedId && startEdit(selectedId)}
-            disabled={!selectedId}
+            disabled={!selectedId || !canEditMap}
             title="이름 수정">
             <Pencil className="w-4 h-4 text-[#717182]" />
           </ToolBtn>
@@ -1304,7 +1436,7 @@ export function CanvasScreen({
           </ToolBtn>
           <ToolBtn
             onClick={() => selectedId && requestDelete(selectedId)}
-            disabled={!selectedId || selectedId === "root"}
+            disabled={!selectedId || selectedId === "root" || !canEditMap}
             title="노드 삭제"
             danger>
             <Trash2 className="w-4 h-4" style={{ color: "#F87171" }} />
@@ -1445,7 +1577,7 @@ export function CanvasScreen({
                 editing={editingId === node.id}
                 editText={editText}
                 onPointerDown={e => handleNodePointerDown(e, node.id)}
-                onDoubleClick={() => startEdit(node.id)}
+                onDoubleClick={() => canEditMap && startEdit(node.id)}
                 onEditChange={setEditText}
                 onEditCommit={commitEdit}
                 onEditCancel={() => setEditingId(null)}
@@ -1491,8 +1623,8 @@ export function CanvasScreen({
                 ))}
               </div>
               <div className="w-px h-4 bg-[#E0DFE0]" />
-              <button onClick={() => addChild(selectedId!)}
-                className="flex items-center gap-1 text-xs font-semibold transition-colors"
+              <button onClick={() => addChild(selectedId!)} disabled={!canEditMap}
+                className="flex items-center gap-1 text-xs font-semibold transition-colors disabled:opacity-35"
                 style={{ color: "#4F46E5" }}>
                 <Plus className="w-3 h-3" />하위 노드
               </button>
@@ -1503,12 +1635,12 @@ export function CanvasScreen({
                 title="하위 노드 자동 정렬">
                 <ListTree className="w-3 h-3" />자동 정렬
               </button>
-              <button onClick={() => startEdit(selectedId!)}
-                className="flex items-center gap-1 text-xs transition-colors"
+              <button onClick={() => startEdit(selectedId!)} disabled={!canEditMap}
+                className="flex items-center gap-1 text-xs transition-colors disabled:opacity-35"
                 style={{ color: "#717182" }}>
                 <Pencil className="w-3 h-3" />
               </button>
-              {selectedId !== "root" && (
+              {selectedId !== "root" && canEditMap && (
                 <>
                   <div className="w-px h-4 bg-[#E0DFE0]" />
                   <button onClick={() => requestDelete(selectedId!)}
@@ -1565,18 +1697,20 @@ export function CanvasScreen({
                 <p className="text-[10px] mb-2 text-[#ABABAB]">작업</p>
                 <div className="space-y-1.5">
                   <button onClick={() => addChild(selectedId!)}
+                    disabled={!canEditMap}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
                     style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#818CF8" }}>
                     <Plus className="w-3.5 h-3.5" />
                     하위 노드 추가
                   </button>
                   <button onClick={() => startEdit(selectedId!)}
+                    disabled={!canEditMap}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all"
                     style={{ background: "#F8F7F4", border: "1px solid #E8E7EA", color: "#717182" }}>
                     <Pencil className="w-3.5 h-3.5" />
                     이름 수정
                   </button>
-                  {selectedId !== "root" && (
+                  {selectedId !== "root" && canEditMap && (
                     <button onClick={() => requestDelete(selectedId!)}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all"
                       style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#F87171" }}>
@@ -1589,7 +1723,24 @@ export function CanvasScreen({
             </div>
             </> : <CommentPanel
               comments={comments.filter(comment => comment.nodeId === selectedId)}
-              onResolve={commentId => setComments(prev => prev.map(comment => comment.id === commentId ? { ...comment, solved: true } : comment))}
+              currentUserId={currentUserId}
+              canResolve={canEditMap}
+              onCreate={async content => {
+                if (/^\d+$/.test(selectedId!)) {
+                  const created = await api.createComment(Number(selectedId), content);
+                  setComments(prev => [...prev, apiCommentToLocal(created)]);
+                } else {
+                  setComments(prev => [...prev, { id: `comment-${crypto.randomUUID()}`, nodeId: selectedId!, authorId: currentUserId, author: "나", content, solved: false }]);
+                }
+              }}
+              onEdit={async (commentId, content) => {
+                if (/^\d+$/.test(commentId)) await api.updateComment(Number(commentId), content);
+                setComments(prev => prev.map(comment => comment.id === commentId ? { ...comment, content } : comment));
+              }}
+              onResolve={async commentId => {
+                if (/^\d+$/.test(commentId)) await api.resolveComment(Number(commentId), true);
+                setComments(prev => prev.map(comment => comment.id === commentId ? { ...comment, solved: true } : comment));
+              }}
             />}
           </div>
         )}
@@ -1625,10 +1776,17 @@ export function CanvasScreen({
   );
 }
 
-function CommentPanel({ comments, onResolve }: {
+function CommentPanel({ comments, currentUserId, canResolve, onCreate, onEdit, onResolve }: {
   comments: CommentData[];
-  onResolve: (commentId: string) => void;
+  currentUserId?: number;
+  canResolve: boolean;
+  onCreate: (content: string) => Promise<void>;
+  onEdit: (commentId: string, content: string) => Promise<void>;
+  onResolve: (commentId: string) => Promise<void>;
 }) {
+  const [newComment, setNewComment] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
   const openComments = comments.filter(comment => !comment.solved);
   const solvedComments = comments.filter(comment => comment.solved);
 
@@ -1638,13 +1796,29 @@ function CommentPanel({ comments, onResolve }: {
         <span className="truncate text-[11px] font-semibold text-[#0D0D14]">{comment.author}</span>
         {solved && <span className="text-[10px] font-medium text-emerald-600">해결됨</span>}
       </div>
-      <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#717182]">{comment.content}</p>
+      {editingCommentId === comment.id ? (
+        <div className="space-y-2">
+          <textarea value={editingContent} onChange={event => setEditingContent(event.target.value)}
+            className="w-full resize-none rounded-lg border border-indigo-200 bg-white p-2 text-xs outline-none" />
+          <div className="flex justify-end gap-1">
+            <button onClick={() => setEditingCommentId(null)} className="px-2 py-1 text-[10px] text-[#717182]">취소</button>
+            <button onClick={async () => { if (!editingContent.trim()) return; await onEdit(comment.id, editingContent.trim()); setEditingCommentId(null); }}
+              className="rounded-md bg-indigo-600 px-2 py-1 text-[10px] font-semibold text-white">저장</button>
+          </div>
+        </div>
+      ) : <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#717182]">{comment.content}</p>}
       {!solved && (
-        <div className="mt-2 flex justify-end">
-          <button onClick={() => onResolve(comment.id)} aria-label="댓글 해결" title="해결됨으로 표시"
+        <div className="mt-2 flex justify-end gap-1">
+          {comment.authorId === currentUserId && (
+            <button onClick={() => { setEditingCommentId(comment.id); setEditingContent(comment.content); }} aria-label="댓글 수정" title="댓글 수정"
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-[#ABABAB] hover:bg-indigo-100 hover:text-indigo-600">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {canResolve && <button onClick={() => onResolve(comment.id)} aria-label="댓글 해결" title="해결됨으로 표시"
             className="flex h-6 w-6 items-center justify-center rounded-lg text-[#ABABAB] transition-colors hover:bg-emerald-100 hover:text-emerald-600">
             <CheckCircle2 className="h-4 w-4" />
-          </button>
+          </button>}
         </div>
       )}
     </div>
@@ -1670,6 +1844,12 @@ function CommentPanel({ comments, onResolve }: {
             <div className="space-y-2">{solvedComments.map(comment => commentCard(comment, true))}</div>
           </div>
         )}
+      </div>
+      <div className="mt-3 border-t border-[#E8E7EA] pt-3">
+        <textarea value={newComment} onChange={event => setNewComment(event.target.value)} placeholder="댓글을 입력하세요"
+          className="w-full resize-none rounded-xl border border-[#E0DFE0] p-2.5 text-xs outline-none focus:border-indigo-300" />
+        <button onClick={async () => { if (!newComment.trim()) return; await onCreate(newComment.trim()); setNewComment(""); }}
+          disabled={!newComment.trim()} className="mt-2 w-full rounded-lg bg-indigo-600 py-2 text-xs font-semibold text-white disabled:opacity-40">댓글 작성</button>
       </div>
     </div>
   );

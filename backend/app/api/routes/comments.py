@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.block_deps import get_block_and_check_membership, require_block_write_access
+from app.core.block_deps import get_block_and_check_membership
 from app.core.comment_deps import (
     get_comment_and_check_membership,
     require_comment_author,
@@ -44,8 +44,9 @@ async def create(
     body: CommentCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    block: Block = Depends(require_block_write_access),
+    block: Block = Depends(get_block_and_check_membership),
 ):
+    """워크스페이스의 모든 멤버(owner/editor/viewer)가 댓글을 작성할 수 있다."""
     comment = await create_comment(db, block_id, current_user.id, body.content)
     await manager.broadcast(block.map_id, comment_event("comment:created", comment))
     return comment
