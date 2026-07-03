@@ -34,8 +34,8 @@
 - [ ] 워크스페이스 생성 / 목록 조회 / 수정 / 삭제
 - [ ] 유저 ID 검색 및 워크스페이스 초대 / 수락·거절
 - [ ] 아이디어 블록 생성 / 연결(재연결) / 삭제 / 위치 이동
-- [ ] **워크스페이스 내 실시간 동기화** (WebSocket) — 협업 툴의 전제 조건이므로 필수로 격상 권장
-  - 블록 생성/삭제/이동/재연결이 다른 팀원 화면에 즉시 반영
+- [ ] 아이디어 블록 색상 지정 (8가지 프리셋 중 선택, 기본값 지정)
+- [ ] **워크스페이스 내 실시간 동기화** (WebSocket) - 블록 생성/삭제/이동/재연결이 다른 팀원 화면에 즉시 반영
 
 ### 선택 기능
 
@@ -113,6 +113,7 @@ erDiagram
         int creator_id FK
         string content
         string source_type
+        string color
         float position_x
         float position_y
         datetime created_at
@@ -159,7 +160,7 @@ erDiagram
 | root_block_id | FK(Block), nullable | 최초 루트 블록 |
 | created_at / updated_at | datetime | |
 
-**WorkspaceMember** *(신규)*
+**WorkspaceMember**
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | id | PK | |
@@ -168,7 +169,7 @@ erDiagram
 | role | string | owner / member |
 | joined_at | datetime | |
 
-**Invitation** *(신규 — API 문서엔 있었으나 스키마 누락)*
+**Invitation**
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | id | PK | |
@@ -187,6 +188,7 @@ erDiagram
 | creator_id | FK(User) | 누가 만들었는지 |
 | content | string | 아이디어 워딩 |
 | source_type | string | manual / recommended |
+| color | enum(string) | 8가지 프리셋 중 하나, 기본값 `gray` |
 | position_x / position_y | float | 캔버스 좌표 (드래그 이동용) |
 | created_at / updated_at | datetime | |
 
@@ -247,10 +249,10 @@ erDiagram
 ### Block
 | Method | Endpoint | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
-| POST | `/api/v1/workspaces/{workspaceId}/blocks` | 블록 생성 | `content`, `parentBlockId?`, `positionX`, `positionY` | `block` |
+| POST | `/api/v1/workspaces/{workspaceId}/blocks` | 블록 생성 | `content`, `parentBlockId?`, `positionX`, `positionY`, `color?` | `block` |
 | GET | `/api/v1/workspaces/{workspaceId}/blocks` | 전체 블록 트리 조회 | 없음 | `blocks[]` |
 | GET | `/api/v1/blocks/{blockId}` | 블록 상세 | 없음 | `block` |
-| PATCH | `/api/v1/blocks/{blockId}` | 내용 수정 | `content` | `block` |
+| PATCH | `/api/v1/blocks/{blockId}` | 내용/색상 수정 | `content?`, `color?` | `block` |
 | PATCH | `/api/v1/blocks/{blockId}/position` | 위치 이동 | `positionX`, `positionY` | `block` |
 | PATCH | `/api/v1/blocks/{blockId}/parent` | 연결/부모 변경 | `parentBlockId` 또는 `null` | `block` |
 | DELETE | `/api/v1/blocks/{blockId}` | 삭제 | 없음 | `message` |
