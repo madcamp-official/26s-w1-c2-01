@@ -1,5 +1,5 @@
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import CheckConstraint, Float, ForeignKey, String
+from sqlalchemy import CheckConstraint, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
@@ -27,6 +27,4 @@ class Block(Base, TimestampMixin):
     content: Mapped[str] = mapped_column(String(500), nullable=False)
     source_type: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
     color: Mapped[str] = mapped_column(String(20), nullable=False, default=DEFAULT_BLOCK_COLOR)
-    position_x: Mapped[float] = mapped_column(Float, nullable=False, default=0)
-    position_y: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)

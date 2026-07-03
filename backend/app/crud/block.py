@@ -32,8 +32,6 @@ async def create_block(
     creator_id: int,
     content: str,
     color: str,
-    position_x: float,
-    position_y: float,
     source_type: str = "manual",
 ) -> Block:
     block = Block(
@@ -42,8 +40,6 @@ async def create_block(
         creator_id=creator_id,
         content=content,
         color=color,
-        position_x=position_x,
-        position_y=position_y,
         source_type=source_type,
     )
     db.add(block)
@@ -59,14 +55,6 @@ async def update_block_content(
         block.content = content
     if color is not None:
         block.color = color
-    await db.commit()
-    await db.refresh(block)
-    return block
-
-
-async def update_block_position(db: AsyncSession, block: Block, x: float, y: float) -> Block:
-    block.position_x = x
-    block.position_y = y
     await db.commit()
     await db.refresh(block)
     return block

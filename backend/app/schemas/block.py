@@ -11,8 +11,6 @@ class BlockCreate(BaseModel):
     content: str = Field(min_length=1, max_length=500)
     # 루트 블록은 마인드맵 생성 시 자동으로만 만들어짐, 일반 생성 API에서는 항상 필수
     parent_block_id: int
-    position_x: float = 0
-    position_y: float = 0
     # None이면 부모 블록의 color를 그대로 상속
     color: BlockColor | None = None
 
@@ -20,11 +18,6 @@ class BlockCreate(BaseModel):
 class BlockUpdate(BaseModel):
     content: str | None = Field(default=None, min_length=1, max_length=500)
     color: BlockColor | None = None
-
-
-class BlockPositionUpdate(BaseModel):
-    position_x: float
-    position_y: float
 
 
 class BlockParentUpdate(BaseModel):
@@ -41,7 +34,5 @@ class BlockPublic(BaseModel):
     content: str
     source_type: str
     color: str
-    position_x: float
-    position_y: float
     created_at: datetime
     updated_at: datetime

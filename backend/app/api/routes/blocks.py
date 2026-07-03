@@ -14,7 +14,6 @@ from app.crud.block import (
     list_blocks_by_map,
     update_block_content,
     update_block_parent,
-    update_block_position,
     would_create_cycle,
 )
 from app.db import get_db
@@ -24,7 +23,6 @@ from app.models.user import User
 from app.schemas.block import (
     BlockCreate,
     BlockParentUpdate,
-    BlockPositionUpdate,
     BlockPublic,
     BlockUpdate,
 )
@@ -60,8 +58,6 @@ async def create(
         creator_id=current_user.id,
         content=body.content,
         color=color,
-        position_x=body.position_x,
-        position_y=body.position_y,
     )
     await manager.broadcast(mindmap.id, block_event("block:created", block))
     # 새 블록이 생겼으니, 이 블록을 기반으로 한 추천을 비동기로 생성 시작
@@ -90,17 +86,6 @@ async def update_content(
     block: Block = Depends(require_block_write_access),
 ):
     updated = await update_block_content(db, block, content=body.content, color=body.color)
-    await manager.broadcast(updated.map_id, block_event("block:updated", updated))
-    return updated
-
-
-@router.patch("/blocks/{block_id}/position", response_model=BlockPublic)
-async def update_position(
-    body: BlockPositionUpdate,
-    db: AsyncSession = Depends(get_db),
-    block: Block = Depends(require_block_write_access),
-):
-    updated = await update_block_position(db, block, body.position_x, body.position_y)
     await manager.broadcast(updated.map_id, block_event("block:updated", updated))
     return updated
 
