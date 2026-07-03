@@ -71,8 +71,6 @@ def upgrade() -> None:
         sa.Column("content", sa.String(length=500), nullable=False),
         sa.Column("source_type", sa.String(length=20), nullable=False),
         sa.Column("color", sa.String(length=20), nullable=False),
-        sa.Column("position_x", sa.Float(), nullable=False),
-        sa.Column("position_y", sa.Float(), nullable=False),
         sa.Column("embedding", pgvector.sqlalchemy.Vector(384), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),

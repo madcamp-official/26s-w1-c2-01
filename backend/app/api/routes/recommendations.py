@@ -50,9 +50,6 @@ async def apply_recommendation(
     db: AsyncSession = Depends(get_db),
     block: Block = Depends(require_block_write_access),
 ):
-    position_x = body.position_x if body.position_x is not None else block.position_x + 200
-    position_y = body.position_y if body.position_y is not None else block.position_y
-
     new_block = await create_block(
         db,
         map_id=block.map_id,
@@ -60,8 +57,6 @@ async def apply_recommendation(
         creator_id=current_user.id,
         content=body.content,
         color=block.color,    # 추천 적용 블록은 부모 색상을 그대로 상속
-        position_x=position_x,
-        position_y=position_y,
         source_type="recommended",
     )
     await manager.broadcast(block.map_id, block_event("block:created", new_block))

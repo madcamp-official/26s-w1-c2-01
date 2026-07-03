@@ -17,8 +17,6 @@ async def create_mindmap(db: AsyncSession, workspace_id: int, created_by: int, n
         content=name,
         source_type="manual",
         color=DEFAULT_BLOCK_COLOR,
-        position_x=0,
-        position_y=0,
     )
     db.add(root_block)
     await db.flush()    # root_block.id 확보

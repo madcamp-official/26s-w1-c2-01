@@ -12,9 +12,6 @@ class RecommendationItem(BaseModel):
 
 class RecommendationApplyRequest(BaseModel):
     content: str = Field(min_length=1, max_length=500)
-    # 프론트가 추천 후보를 화면에 미리 배치해둔 위치가 있으면 그대로 전달, 없으면 서버가 기본값 계산
-    position_x: float | None = None
-    position_y: float | None = None
 
 
 class RecommendationSettingUpdate(BaseModel):
