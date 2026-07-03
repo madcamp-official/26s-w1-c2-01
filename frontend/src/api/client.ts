@@ -6,6 +6,9 @@ export interface ApiWorkspace { id: number; name: string; owner_id: number; crea
 export interface ApiMindMap { id: number; workspace_id: number; name: string; root_block_id: number | null; node_count?: number; updated_at: string; }
 export interface ApiBlock { id: number; map_id: number; parent_block_id: number | null; creator_id: number; content: string; color: string; }
 export interface ApiComment { id: number; block_id: number; author: ApiUser; content: string; solved: boolean; created_at: string; updated_at: string; }
+export interface ApiInvitation { id: number; workspace: ApiWorkspace; inviter: ApiUser; role: "editor" | "viewer"; status: "pending" | "accepted" | "rejected"; created_at: string; }
+export interface ApiRecommendation { content: string; score: number; source: "semantic" | "search"; }
+export interface ApiUserSearchResult { id: number; email: string; name: string; }
 
 interface TokenResponse { access_token: string; refresh_token: string; user: ApiUser; }
 
@@ -55,6 +58,7 @@ export const api = {
     request<ApiBlock>(`/blocks/${blockId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteBlock: (blockId: number) => request<{ message: string }>(`/blocks/${blockId}`, { method: "DELETE" }),
   listComments: (blockId: number) => request<ApiComment[]>(`/blocks/${blockId}/comments`),
+  listCommentsByMap: (mapId: number) => request<ApiComment[]>(`/maps/${mapId}/comments`),
   createComment: (blockId: number, content: string) =>
     request<ApiComment>(`/blocks/${blockId}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
   updateComment: (commentId: number, content: string) =>
@@ -63,4 +67,13 @@ export const api = {
     request<ApiComment>(`/comments/${commentId}/solved`, { method: "PATCH", body: JSON.stringify({ solved }) }),
   updateMemberRole: (workspaceId: number, userId: number, role: "editor" | "viewer") =>
     request<ApiMember>(`/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  searchUsers: (query: string) => request<ApiUserSearchResult[]>(`/users/search?q=${encodeURIComponent(query)}`),
+  inviteToWorkspace: (workspaceId: number, userId: number, role: "editor" | "viewer") =>
+    request<ApiInvitation>(`/workspaces/${workspaceId}/invite`, { method: "POST", body: JSON.stringify({ user_id: userId, role }) }),
+  listInvitations: () => request<ApiInvitation[]>("/invitations"),
+  acceptInvitation: (invitationId: number) => request<{ message: string }>(`/invitations/${invitationId}/accept`, { method: "POST" }),
+  rejectInvitation: (invitationId: number) => request<{ message: string }>(`/invitations/${invitationId}/reject`, { method: "POST" }),
+  getRecommendations: (blockId: number, limit = 6) => request<ApiRecommendation[]>(`/blocks/${blockId}/recommendations?limit=${limit}`),
+  applyRecommendation: (blockId: number, content: string) =>
+    request<ApiBlock>(`/blocks/${blockId}/recommendations/apply`, { method: "POST", body: JSON.stringify({ content }) }),
 };

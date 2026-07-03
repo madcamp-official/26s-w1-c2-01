@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { api, ApiBlock, ApiComment } from "../api/client";
+import { api, ApiBlock, ApiComment, ApiInvitation } from "../api/client";
 import {
-  Plus, Share2, Check, X, Copy, ArrowLeft, ZoomIn, ZoomOut,
-  Trash2, Brain, LogOut, Link2, Globe, Bell, ChevronRight,
-  Maximize2, Lock, UserPlus, Pencil, GitBranch, LocateFixed,
+  Plus, Share2, Check, X, ArrowLeft, ZoomIn, ZoomOut,
+  Trash2, Brain, LogOut, UserPlus, Bell, ChevronRight,
+  Maximize2, Pencil, GitBranch, LocateFixed,
   ListTree,
   MessageCircle, SlidersHorizontal, CheckCircle2,
 } from "lucide-react";
@@ -25,56 +25,6 @@ interface CommentData { id: string; nodeId: string; authorId?: number; author: s
 // ─── Static data ────────────────────────────────────────────────────────────
 
 const NODE_COLORS = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#3b82f6"];
-
-export const WORKSPACES: WorkspaceData[] = [
-  {
-    id: "ws1", name: "제품 팀",
-    members: [
-      { id: "m1", name: "Alex Chen",  email: "alex@acme.com",   role: "owner",  initials: "AC", color: "#6366f1" },
-      { id: "m2", name: "Sarah Kim",  email: "sarah@acme.com",  role: "editor", initials: "SK", color: "#06b6d4" },
-      { id: "m3", name: "Jordan Lee", email: "jordan@acme.com", role: "editor", initials: "JL", color: "#10b981" },
-      { id: "m4", name: "Maya Patel", email: "maya@acme.com",   role: "viewer", initials: "MP", color: "#f59e0b" },
-    ],
-    maps: [
-      { id: "map1", name: "2026 제품 전략", nodeCount: 24, updatedAt: "2시간 전" },
-      { id: "map2", name: "3분기 로드맵",     nodeCount: 18, updatedAt: "어제"     },
-      { id: "map3", name: "사용자 조사 주제", nodeCount: 12, updatedAt: "3일 전"  },
-    ],
-  },
-  {
-    id: "ws2", name: "디자인 시스템",
-    members: [
-      { id: "m1", name: "Alex Chen",  email: "alex@acme.com",  role: "owner",  initials: "AC", color: "#6366f1" },
-      { id: "m5", name: "Priya Nair", email: "priya@acme.com", role: "editor", initials: "PN", color: "#ec4899" },
-    ],
-    maps: [
-      { id: "map4", name: "컴포넌트 구조", nodeCount: 31, updatedAt: "3일 전" },
-    ],
-  },
-];
-
-const INIT_NODES: NodeData[] = [
-  { id: "root", text: "2026 제품 전략", x: 600,  y: 370, color: "#6366f1", parentId: null   },
-  { id: "n1",   text: "성장",           x: 880,  y: 220, color: "#8b5cf6", parentId: "root" },
-  { id: "n2",   text: "사용자 유지",    x: 880,  y: 370, color: "#06b6d4", parentId: "root" },
-  { id: "n3",   text: "수익",           x: 880,  y: 520, color: "#10b981", parentId: "root" },
-  { id: "n4",   text: "사용자 확보",    x: 330,  y: 240, color: "#f59e0b", parentId: "root" },
-  { id: "n5",   text: "검색 최적화 / 콘텐츠", x: 1130, y: 155, color: "#8b5cf6", parentId: "n1" },
-  { id: "n6",   text: "추천 확산",       x: 1130, y: 280, color: "#8b5cf6", parentId: "n1" },
-  { id: "n7",   text: "온보딩 흐름",     x: 1130, y: 345, color: "#06b6d4", parentId: "n2" },
-  { id: "n8",   text: "푸시 알림",       x: 1130, y: 435, color: "#06b6d4", parentId: "n2" },
-  { id: "n9",   text: "유료 요금제",     x: 1130, y: 520, color: "#10b981", parentId: "n3" },
-  { id: "n10",  text: "콘텐츠 마케팅",   x: 120,  y: 185, color: "#f59e0b", parentId: "n4" },
-  { id: "n11",  text: "파트너십",        x: 120,  y: 310, color: "#f59e0b", parentId: "n4" },
-];
-
-const INIT_COMMENTS: CommentData[] = [
-  { id: "comment-1", nodeId: "root", author: "Sarah Kim", content: "이번 분기 핵심 목표와 연결하면 방향이 더 명확해질 것 같아요.", solved: false },
-  { id: "comment-2", nodeId: "n1", author: "Jordan Lee", content: "성장 지표를 신규 사용자와 기존 사용자로 나눠서 확인해 보면 어떨까요?", solved: false },
-  { id: "comment-3", nodeId: "n1", author: "Maya Patel", content: "지난 회의에서 논의한 실험 결과를 반영했습니다.", solved: true },
-  { id: "comment-4", nodeId: "n2", author: "Sarah Kim", content: "리텐션 기준 기간을 7일과 30일로 함께 표시해 주세요.", solved: false },
-  { id: "comment-5", nodeId: "root", authorId: 1, author: "Alex Chen", content: "목표 문구를 조금 더 구체적으로 다듬어 보겠습니다.", solved: false },
-];
 
 const API_COLOR_HEX: Record<string, string> = {
   indigo: "#6366f1", violet: "#8b5cf6", cyan: "#06b6d4", emerald: "#10b981",
@@ -106,15 +56,13 @@ const apiCommentToLocal = (comment: ApiComment): CommentData => ({
   author: comment.author.name, content: comment.content, solved: comment.solved,
 });
 
-const genId = () => `node-${crypto.randomUUID()}`;
-
 // ─── Login Screen ───────────────────────────────────────────────────────────
 
 export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string, password: string, isSignUp: boolean) => Promise<void> | void }) {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [name, setName]         = useState("Alex Chen");
-  const [email, setEmail]       = useState("alex@acme.com");
-  const [password, setPassword] = useState("password");
+  const [name, setName]         = useState("");
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -224,10 +172,7 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
               <input className={inp} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" />
             </div>
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[11px] font-semibold text-[#0D0D14] uppercase tracking-wider">비밀번호</label>
-                {!isSignUp && <button className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">비밀번호 찾기</button>}
-              </div>
+              <label className="block text-[11px] font-semibold text-[#0D0D14] uppercase tracking-wider mb-1.5">비밀번호</label>
               <input type="password" className={inp} value={password}
                 onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
             </div>
@@ -254,22 +199,6 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
               {isSignUp ? "로그인" : "계정 만들기"}
             </button>
           </p>
-
-          <div className="mt-7 pt-6 border-t border-[#E0DFE0]">
-            <p className="text-xs text-[#ABABAB] text-center mb-3">다른 계정으로 계속하기</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E0DFE0] bg-white hover:bg-[#F3F2F5] text-sm text-[#0D0D14] font-medium transition-colors">
-                <GoogleIcon /> Google
-              </button>
-              <button className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E0DFE0] bg-white hover:bg-[#F3F2F5] text-sm text-[#0D0D14] font-medium transition-colors">
-                <GitHubIcon /> GitHub
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-5 p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-center">
-            <p className="text-xs text-indigo-600">데모: 로그인 버튼을 눌러 앱을 둘러보세요</p>
-          </div>
         </div>
       </div>
     </div>
@@ -279,17 +208,19 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
 // ─── Workspace Screen ────────────────────────────────────────────────────────
 
 export function WorkspaceScreen({
-  user, onOpenCanvas, onViewInvitation, onLogout, initialWorkspaces = WORKSPACES, onMemberRoleChange,
+  user, onOpenCanvas, onViewInvitation, onLogout, initialWorkspaces = [], pendingInvitationCount = 0, onMemberRoleChange, onInvite,
 }: {
   user: { id?: number; name: string; email: string };
   onOpenCanvas: (ws: WorkspaceData, map: MapData) => void;
   onViewInvitation: () => void;
   onLogout: () => void;
   initialWorkspaces?: WorkspaceData[];
+  pendingInvitationCount?: number;
   onMemberRoleChange?: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
+  onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
 }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceData[]>(initialWorkspaces);
-  const [activeId, setActiveId]     = useState(initialWorkspaces[0]?.id ?? "ws1");
+  const [activeId, setActiveId]     = useState(initialWorkspaces[0]?.id ?? "");
   const [showShare, setShowShare]   = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateMap, setShowCreateMap] = useState(false);
@@ -320,7 +251,9 @@ export function WorkspaceScreen({
         <button onClick={onViewInvitation}
           className="relative w-8 h-8 rounded-full hover:bg-[#F0EFF5] flex items-center justify-center transition-colors">
           <Bell className="w-4 h-4 text-[#717182]" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-indigo-500 rounded-full" />
+          {pendingInvitationCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-indigo-500 rounded-full" />
+          )}
         </button>
 
         {/* User */}
@@ -372,89 +305,116 @@ export function WorkspaceScreen({
         </aside>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-3xl mx-auto">
-            {/* Header */}
-            <div className="flex items-start justify-between mb-8">
-              <div>
-                <h1 className="text-2xl font-semibold text-[#0D0D14] tracking-tight">{ws.name}</h1>
-                <p className="text-sm text-[#717182] mt-0.5">
-                  멤버 {ws.members.length}명 · 마인드맵 {ws.maps.length}개
-                </p>
-              </div>
-              <button onClick={() => setShowShare(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-indigo-600/20">
-                <Share2 className="w-4 h-4" />
-                워크스페이스 공유
-              </button>
-            </div>
-
-            {/* Maps */}
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[11px] font-bold text-[#ABABAB] uppercase tracking-widest">마인드맵</h2>
-                <button onClick={() => setShowCreateMap(true)}
-                  className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 font-semibold">
-                  <Plus className="w-3.5 h-3.5" />새 마인드맵
-                </button>
-              </div>
-              <div className="grid gap-2.5">
-                {ws.maps.map(map => (
-                  <button key={map.id} onClick={() => onOpenCanvas(ws, map)}
-                    className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-[#E8E7EA] hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-100/60 transition-all text-left group">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
-                      <GitBranch className="w-5 h-5 text-indigo-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[#0D0D14] group-hover:text-indigo-700 transition-colors">{map.name}</p>
-                      <p className="text-xs text-[#717182] mt-0.5">노드 {map.nodeCount}개 · {map.updatedAt} 수정</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-[#C8C7D0] group-hover:text-indigo-400 transition-colors flex-shrink-0" />
+        {ws ? (
+          <>
+            <main className="flex-1 overflow-y-auto p-8">
+              <div className="max-w-3xl mx-auto">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-8">
+                  <div>
+                    <h1 className="text-2xl font-semibold text-[#0D0D14] tracking-tight">{ws.name}</h1>
+                    <p className="text-sm text-[#717182] mt-0.5">
+                      멤버 {ws.members.length}명 · 마인드맵 {ws.maps.length}개
+                    </p>
+                  </div>
+                  <button onClick={() => setShowShare(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-indigo-600/20">
+                    <Share2 className="w-4 h-4" />
+                    워크스페이스 공유
                   </button>
+                </div>
+
+                {/* Maps */}
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-[11px] font-bold text-[#ABABAB] uppercase tracking-widest">마인드맵</h2>
+                    <button onClick={() => setShowCreateMap(true)}
+                      className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 font-semibold">
+                      <Plus className="w-3.5 h-3.5" />새 마인드맵
+                    </button>
+                  </div>
+                  <div className="grid gap-2.5">
+                    {ws.maps.length ? ws.maps.map(map => (
+                      <button key={map.id} onClick={() => onOpenCanvas(ws, map)}
+                        className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-[#E8E7EA] hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-100/60 transition-all text-left group">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
+                          <GitBranch className="w-5 h-5 text-indigo-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[#0D0D14] group-hover:text-indigo-700 transition-colors">{map.name}</p>
+                          <p className="text-xs text-[#717182] mt-0.5">노드 {map.nodeCount}개 · {map.updatedAt} 수정</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-[#C8C7D0] group-hover:text-indigo-400 transition-colors flex-shrink-0" />
+                      </button>
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-[#E0DFE0] px-4 py-8 text-center text-sm text-[#ABABAB]">
+                        아직 마인드맵이 없어요. 새 마인드맵을 만들어보세요.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </main>
+
+            <aside className="w-72 bg-white border-l border-[#E8E7EA] flex-shrink-0 p-5 overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[11px] font-bold text-[#ABABAB] uppercase tracking-widest">멤버</h2>
+                <span className="text-xs font-semibold text-indigo-600">{ws.members.length}명</span>
+              </div>
+              <div className="space-y-2">
+                {ws.members.map(m => (
+                  <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F8F7F4] transition-colors">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                      style={{ backgroundColor: m.color }}>{m.initials}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[#0D0D14] truncate">{m.name}</p>
+                      <p className="text-[11px] text-[#717182] truncate">{m.email}</p>
+                    </div>
+                    {ws.currentRole === "owner" && m.role !== "owner" ? (
+                      <select value={m.role} onChange={event => setRoleChange({ member: m, role: event.target.value as "editor" | "viewer" })}
+                        className="rounded-lg border border-[#E0DFE0] bg-white px-2 py-1 text-[10px] font-semibold text-[#717182]">
+                        <option value="editor">편집자</option><option value="viewer">뷰어</option>
+                      </select>
+                    ) : <span className="text-[10px] font-semibold text-[#717182]">
+                      {m.role === "owner" ? "소유자" : m.role === "editor" ? "편집자" : "뷰어"}
+                    </span>}
+                  </div>
                 ))}
               </div>
-            </section>
-          </div>
-        </main>
-
-        <aside className="w-72 bg-white border-l border-[#E8E7EA] flex-shrink-0 p-5 overflow-y-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[11px] font-bold text-[#ABABAB] uppercase tracking-widest">멤버</h2>
-            <span className="text-xs font-semibold text-indigo-600">{ws.members.length}명</span>
-          </div>
-          <div className="space-y-2">
-            {ws.members.map(m => (
-              <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F8F7F4] transition-colors">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                  style={{ backgroundColor: m.color }}>{m.initials}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[#0D0D14] truncate">{m.name}</p>
-                  <p className="text-[11px] text-[#717182] truncate">{m.email}</p>
-                </div>
-                {ws.currentRole === "owner" && m.role !== "owner" ? (
-                  <select value={m.role} onChange={event => setRoleChange({ member: m, role: event.target.value as "editor" | "viewer" })}
-                    className="rounded-lg border border-[#E0DFE0] bg-white px-2 py-1 text-[10px] font-semibold text-[#717182]">
-                    <option value="editor">편집자</option><option value="viewer">뷰어</option>
-                  </select>
-                ) : <span className="text-[10px] font-semibold text-[#717182]">
-                  {m.role === "owner" ? "소유자" : m.role === "editor" ? "편집자" : "뷰어"}
-                </span>}
+            </aside>
+          </>
+        ) : (
+          <main className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center max-w-sm">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-4">
+                <GitBranch className="w-6 h-6 text-indigo-500" />
               </div>
-            ))}
-          </div>
-        </aside>
+              <h2 className="text-lg font-semibold text-[#0D0D14] mb-1">워크스페이스가 없어요</h2>
+              <p className="text-sm text-[#717182] mb-5">첫 워크스페이스를 만들고 팀과 마인드맵을 시작해보세요.</p>
+              <button onClick={() => setShowCreate(true)}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                새 워크스페이스 만들기
+              </button>
+            </div>
+          </main>
+        )}
       </div>
 
-      {showShare  && <ShareModal workspace={ws} onClose={() => setShowShare(false)} />}
+      {showShare && ws && <ShareModal workspace={ws} onClose={() => setShowShare(false)} onInvite={onInvite} />}
       {showCreate && (
         <CreateWorkspaceModal
           onClose={() => setShowCreate(false)}
           onCreate={async wname => {
-            const created = await api.createWorkspace(wname).catch(() => null);
+            const created = await api.createWorkspace(wname);
+            const detail = await api.workspaceDetail(created.id);
+            const members: MemberData[] = (detail.members ?? []).map((membership, index) => ({
+              id: String(membership.id), userId: membership.user.id, name: membership.user.name, email: membership.user.email,
+              role: membership.role, initials: membership.user.name.split(" ").map(part => part[0]).join(""),
+              color: ["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#ec4899"][index % 5],
+            }));
             const nw: WorkspaceData = {
-              id: created ? String(created.id) : `ws-${Date.now()}`, name: wname,
-              ownerId: created?.owner_id, currentRole: "owner",
-              members: [{ id: "m1", name: user.name, email: user.email, role: "owner",
+              id: String(created.id), name: created.name, ownerId: created.owner_id, currentRole: "owner",
+              members: members.length ? members : [{ id: "self", name: user.name, email: user.email, role: "owner",
                 initials: user.name.split(" ").map(n => n[0]).join(""), color: "#6366f1" }],
               maps: [],
             };
@@ -464,17 +424,12 @@ export function WorkspaceScreen({
           }}
         />
       )}
-      {showCreateMap && (
+      {showCreateMap && ws && (
         <CreateMindMapModal
           onClose={() => setShowCreateMap(false)}
           onCreate={async mapName => {
-            const created = /^\d+$/.test(ws.id) ? await api.createMap(Number(ws.id), mapName).catch(() => null) : null;
-            const map: MapData = {
-              id: created ? String(created.id) : `map-${Date.now()}`,
-              name: mapName,
-              nodeCount: 1,
-              updatedAt: "방금",
-            };
+            const created = await api.createMap(Number(ws.id), mapName);
+            const map: MapData = { id: String(created.id), name: created.name, nodeCount: 1, updatedAt: "방금" };
             const updatedWorkspace = { ...ws, maps: [...ws.maps, map] };
             setWorkspaces(prev => prev.map(item => item.id === ws.id ? updatedWorkspace : item));
             setShowCreateMap(false);
@@ -482,7 +437,7 @@ export function WorkspaceScreen({
           }}
         />
       )}
-      {roleChange && (
+      {roleChange && ws && (
         <ConfirmModal
           title="멤버 역할을 변경할까요?"
           description={`${roleChange.member.name}님의 역할을 ${roleChange.role === "editor" ? "편집자" : "뷰어"}(으)로 변경합니다.`}
@@ -503,18 +458,27 @@ export function WorkspaceScreen({
 
 // ─── Share Modal ────────────────────────────────────────────────────────────
 
-function ShareModal({ workspace, onClose }: { workspace: WorkspaceData; onClose: () => void }) {
+function ShareModal({ workspace, onClose, onInvite }: {
+  workspace: WorkspaceData;
+  onClose: () => void;
+  onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
+}) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole]   = useState<"editor" | "viewer">("editor");
-  const [copied, setCopied]           = useState(false);
-  const [access, setAccess]           = useState<"invite" | "link">("invite");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [error, setError]   = useState("");
 
-  const shareUrl = `https://mindspace.app/join/${workspace.id}/abc123`;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(shareUrl).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleInvite = async () => {
+    if (!inviteEmail.trim() || status === "sending") return;
+    setStatus("sending"); setError("");
+    try {
+      await onInvite?.(workspace.id, inviteEmail.trim(), inviteRole);
+      setStatus("sent");
+      setInviteEmail("");
+    } catch (reason) {
+      setStatus("error");
+      setError(reason instanceof Error ? reason.message : "초대에 실패했습니다");
+    }
   };
 
   return (
@@ -533,8 +497,9 @@ function ShareModal({ workspace, onClose }: { workspace: WorkspaceData; onClose:
           <div>
             <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-2">이메일로 초대</label>
             <div className="flex gap-2">
-              <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+              <input value={inviteEmail} onChange={e => { setInviteEmail(e.target.value); setStatus("idle"); }}
                 placeholder="동료의 이메일 주소"
+                onKeyDown={e => e.key === "Enter" && handleInvite()}
                 className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all" />
               <select value={inviteRole} onChange={e => setInviteRole(e.target.value as "editor" | "viewer")}
                 className="px-3 py-2 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none bg-white text-[#0D0D14]">
@@ -542,46 +507,13 @@ function ShareModal({ workspace, onClose }: { workspace: WorkspaceData; onClose:
                 <option value="viewer">뷰어</option>
               </select>
             </div>
-            <button className="mt-2.5 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+            <button onClick={handleInvite} disabled={!inviteEmail.trim() || status === "sending"}
+              className="mt-2.5 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
               <UserPlus className="w-4 h-4" />
-              초대 보내기
+              {status === "sending" ? "보내는 중..." : "초대 보내기"}
             </button>
-          </div>
-
-          {/* Share link */}
-          <div>
-            <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-2">공유 링크</label>
-            <div className="flex gap-2 items-center px-3.5 py-3 rounded-xl bg-[#F8F7F4] border border-[#E8E7EA]">
-              <Link2 className="w-3.5 h-3.5 text-[#ABABAB] flex-shrink-0" />
-              <span className="flex-1 text-xs text-[#717182] truncate font-mono">{shareUrl}</span>
-              <button onClick={handleCopy}
-                className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex-shrink-0">
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "복사됨" : "복사"}
-              </button>
-            </div>
-          </div>
-
-          {/* Access control */}
-          <div>
-            <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-2">접근 권한</label>
-            <div className="flex gap-2">
-              {([
-                { value: "invite", label: "초대받은 사람만", Icon: Lock  },
-                { value: "link",   label: "링크가 있는 사람", Icon: Globe },
-              ] as const).map(({ value, label, Icon }) => (
-                <button key={value} onClick={() => setAccess(value)}
-                  className={[
-                    "flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all",
-                    access === value
-                      ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-                      : "border-[#E0DFE0] text-[#717182] hover:border-indigo-200",
-                  ].join(" ")}>
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
+            {status === "sent" && <p className="mt-2 text-xs text-emerald-600">초대를 보냈습니다.</p>}
+            {status === "error" && <p className="mt-2 text-xs text-red-500">{error}</p>}
           </div>
 
           {/* Members list */}
@@ -610,9 +542,19 @@ function ShareModal({ workspace, onClose }: { workspace: WorkspaceData; onClose:
 
 function CreateWorkspaceModal({ onClose, onCreate }: {
   onClose: () => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim() || submitting) return;
+    setSubmitting(true); setError("");
+    try { await onCreate(name.trim()); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "워크스페이스 생성에 실패했습니다"); }
+    finally { setSubmitting(false); }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -629,18 +571,19 @@ function CreateWorkspaceModal({ onClose, onCreate }: {
             <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-1.5">워크스페이스 이름</label>
             <input autoFocus value={name} onChange={e => setName(e.target.value)}
               placeholder="예: 마케팅 팀"
-              onKeyDown={e => e.key === "Enter" && name.trim() && onCreate(name.trim())}
+              onKeyDown={e => e.key === "Enter" && submit()}
               className="w-full px-4 py-3 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all" />
+            {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
           </div>
           <div className="flex gap-3">
             <button onClick={onClose}
               className="flex-1 py-2.5 rounded-xl border border-[#E0DFE0] text-sm text-[#717182] hover:bg-[#F3F2F6] font-medium transition-colors">
               취소
             </button>
-            <button onClick={() => name.trim() && onCreate(name.trim())}
-              disabled={!name.trim()}
+            <button onClick={submit}
+              disabled={!name.trim() || submitting}
               className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-40">
-              만들기
+              {submitting ? "만드는 중..." : "만들기"}
             </button>
           </div>
         </div>
@@ -651,9 +594,19 @@ function CreateWorkspaceModal({ onClose, onCreate }: {
 
 function CreateMindMapModal({ onClose, onCreate }: {
   onClose: () => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim() || submitting) return;
+    setSubmitting(true); setError("");
+    try { await onCreate(name.trim()); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "마인드맵 생성에 실패했습니다"); }
+    finally { setSubmitting(false); }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -670,19 +623,20 @@ function CreateMindMapModal({ onClose, onCreate }: {
             <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-1.5">마인드맵 이름</label>
             <input autoFocus value={name} onChange={e => setName(e.target.value)}
               placeholder="예: 신제품 아이디어"
-              onKeyDown={e => e.key === "Enter" && name.trim() && onCreate(name.trim())}
+              onKeyDown={e => e.key === "Enter" && submit()}
               className="w-full px-4 py-3 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all" />
             <p className="mt-2 text-xs text-[#ABABAB]">같은 이름의 루트 노드가 함께 생성됩니다.</p>
+            {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
           </div>
           <div className="flex gap-3">
             <button onClick={onClose}
               className="flex-1 py-2.5 rounded-xl border border-[#E0DFE0] text-sm text-[#717182] hover:bg-[#F3F2F6] font-medium transition-colors">
               취소
             </button>
-            <button onClick={() => name.trim() && onCreate(name.trim())}
-              disabled={!name.trim()}
+            <button onClick={submit}
+              disabled={!name.trim() || submitting}
               className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-40">
-              만들기
+              {submitting ? "만드는 중..." : "만들기"}
             </button>
           </div>
         </div>
@@ -718,38 +672,26 @@ function ConfirmModal({ title, description, confirmLabel, onCancel, onConfirm }:
 
 // ─── Invitation Screen ───────────────────────────────────────────────────────
 
-export function InvitationScreen({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void }) {
-  const [accepted, setAccepted] = useState(false);
+export function InvitationScreen({ invitations, onAccept, onReject, onClose }: {
+  invitations: ApiInvitation[];
+  onAccept: (invitationId: number) => Promise<void>;
+  onReject: (invitationId: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  if (accepted) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm flex items-center justify-center p-8">
-        <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E7EA] bg-white p-8 text-center shadow-2xl">
-          <button onClick={onDecline} aria-label="나가기"
-            className="absolute right-4 top-4 w-8 h-8 rounded-full hover:bg-[#F0EFF5] flex items-center justify-center transition-colors">
-            <X className="w-4 h-4 text-[#717182]" />
-          </button>
-          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
-            <Check className="w-8 h-8 text-emerald-600" />
-          </div>
-          <h2 className="text-xl font-semibold text-[#0D0D14] mb-2 tracking-tight">참여가 완료됐어요!</h2>
-          <p className="text-[#717182] mb-6 text-sm">
-            엔지니어링 리드 워크스페이스에 오신 것을 환영합니다. 이제 팀과 함께 마인드맵을 만들 수 있어요.
-          </p>
-          <button onClick={onAccept}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors">
-            워크스페이스 열기
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const act = async (invitationId: number, action: (id: number) => Promise<void>) => {
+    if (busyId) return;
+    setBusyId(invitationId);
+    try { await action(invitationId); }
+    finally { setBusyId(null); }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/10 backdrop-blur-sm flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl border border-[#E8E7EA]">
-          <button onClick={onDecline} aria-label="나가기"
+          <button onClick={onClose} aria-label="나가기"
             className="absolute right-4 top-4 z-10 w-8 h-8 rounded-full bg-white/15 border border-white/20 hover:bg-white/25 flex items-center justify-center transition-colors">
             <X className="w-4 h-4 text-white" />
           </button>
@@ -759,57 +701,50 @@ export function InvitationScreen({ onAccept, onDecline }: { onAccept: () => void
             <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-4 border border-white/20">
               <Brain className="w-7 h-7 text-white" />
             </div>
-            <h1 className="text-xl font-semibold text-white mb-1 tracking-tight">워크스페이스에 초대받았어요!</h1>
-            <p className="text-white/60 text-sm">MindSpace에서 팀과 함께 아이디어를 펼쳐보세요</p>
+            <h1 className="text-xl font-semibold text-white mb-1 tracking-tight">받은 초대</h1>
+            <p className="text-white/60 text-sm">
+              {invitations.length ? `${invitations.length}개의 워크스페이스 초대가 있어요` : "MindSpace에서 팀과 함께 아이디어를 펼쳐보세요"}
+            </p>
           </div>
 
-          <div className="px-8 py-6">
-            {/* Inviter */}
-            <div className="flex items-center gap-3.5 mb-6 p-4 rounded-2xl bg-[#F8F7F4]">
-              <div className="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                SK
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[#0D0D14]">Sarah Kim</p>
-                <p className="text-xs text-[#717182]">워크스페이스에 초대했어요</p>
-              </div>
-            </div>
-
-            {/* Workspace info */}
-            <div className="mb-6">
-              <div className="flex items-center gap-3.5 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
-                  E
-                </div>
-                <div>
-                  <p className="font-semibold text-[#0D0D14]">엔지니어링 리드</p>
-                  <p className="text-xs text-[#717182]">멤버 5명 · 마인드맵 8개</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                {[
-                  { label: "내 역할",  value: "편집자"      },
-                  { label: "만료일",    value: "2026년 7월 10일" },
-                ].map(({ label, value }) => (
-                  <div key={label} className="p-3.5 rounded-xl bg-[#F8F7F4] border border-[#E8E7EA]">
-                    <p className="text-xs text-[#717182] mb-0.5">{label}</p>
-                    <p className="text-sm font-semibold text-[#0D0D14]">{value}</p>
+          <div className="px-8 py-6 max-h-[60vh] overflow-y-auto space-y-4">
+            {invitations.length === 0 && (
+              <p className="text-center text-sm text-[#717182] py-6">받은 초대가 없습니다.</p>
+            )}
+            {invitations.map(invitation => (
+              <div key={invitation.id} className="p-4 rounded-2xl border border-[#E8E7EA] bg-[#F8F7F4]">
+                <div className="flex items-center gap-3.5 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {invitation.inviter.name.split(" ").map(part => part[0]).join("")}
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#0D0D14]">{invitation.inviter.name}</p>
+                    <p className="text-xs text-[#717182]">워크스페이스에 초대했어요</p>
+                  </div>
+                </div>
 
-            <div className="flex gap-3">
-              <button onClick={onDecline}
-                className="flex-1 py-3 rounded-xl border border-[#E0DFE0] text-sm text-[#717182] hover:bg-[#F3F2F6] font-medium transition-colors">
-                거절
-              </button>
-              <button onClick={() => setAccepted(true)}
-                className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors shadow-sm shadow-indigo-600/20">
-                초대 수락
-              </button>
-            </div>
+                <div className="flex items-center gap-3.5 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
+                    {invitation.workspace.name[0]}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-[#0D0D14]">{invitation.workspace.name}</p>
+                    <p className="text-xs text-[#717182]">역할: {invitation.role === "editor" ? "편집자" : "뷰어"}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button disabled={busyId === invitation.id} onClick={() => act(invitation.id, onReject)}
+                    className="flex-1 py-2.5 rounded-xl border border-[#E0DFE0] text-sm text-[#717182] hover:bg-[#F3F2F6] font-medium transition-colors disabled:opacity-50">
+                    거절
+                  </button>
+                  <button disabled={busyId === invitation.id} onClick={() => act(invitation.id, onAccept)}
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors shadow-sm shadow-indigo-600/20 disabled:opacity-50">
+                    {busyId === invitation.id ? "처리 중..." : "초대 수락"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -893,7 +828,7 @@ function placeRecommendations(
 }
 
 function nodeBounds(node: NodeData) {
-  const isRoot = node.id === "root";
+  const isRoot = node.parentId === null;
   const horizontalPadding = isRoot ? 48 : 34;
   const verticalPadding = isRoot ? 28 : 18;
   const minWidth = isRoot ? 200 : 100;
@@ -913,7 +848,7 @@ function nodeBounds(node: NodeData) {
 
 function relaxNodeCollisions(input: NodeData[], pinnedIds = new Set<string>()): NodeData[] {
   const result = input.map(node => ({ ...node }));
-  const root = result.find(node => node.id === "root");
+  const root = result.find(node => node.parentId === null);
   if (root) pinnedIds.add(root.id);
 
   for (let iteration = 0; iteration < 20; iteration += 1) {
@@ -953,7 +888,7 @@ function relaxNodeCollisions(input: NodeData[], pinnedIds = new Set<string>()): 
 }
 
 export function CanvasScreen({
-  workspace, mapId, mapName, userInitials, currentUserId, currentRole = workspace.currentRole ?? "editor", onBack,
+  workspace, mapId, mapName, userInitials, currentUserId, currentRole = workspace.currentRole ?? "editor", onBack, onInvite, onLogout,
 }: {
   workspace: WorkspaceData;
   mapId: string;
@@ -962,28 +897,29 @@ export function CanvasScreen({
   currentUserId?: number;
   currentRole?: Role;
   onBack: () => void;
+  onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
+  onLogout?: () => void;
 }) {
-  const [nodes, setNodes]       = useState<NodeData[]>(() =>
-    INIT_NODES.map(node => node.id === "root" ? { ...node, text: mapName } : { ...node })
-  );
-  const [edges, setEdges]       = useState<EdgeData[]>(
-    INIT_NODES.filter(n => n.parentId).map(n => ({ from: n.parentId!, to: n.id }))
-  );
+  const [nodes, setNodes]       = useState<NodeData[]>([]);
+  const [edges, setEdges]       = useState<EdgeData[]>([]);
+  const [mapLoading, setMapLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId]   = useState<string | null>(null);
   const [editText, setEditText]     = useState("");
   const [pan, setPan]               = useState({ x: 80, y: 40 });
   const [zoom, setZoom]             = useState(0.78);
   const [showShare, setShowShare]   = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isRecentering, setIsRecentering] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationState | null>(null);
+  const [recommendationContents, setRecommendationContents] = useState<string[]>([]);
   const [hoveredRecommendationId, setHoveredRecommendationId] = useState<string | null>(null);
   const [acceptingRecommendationId, setAcceptingRecommendationId] = useState<string | null>(null);
   const [isAutoArranging, setIsAutoArranging] = useState(false);
   const [isZoomAnimating, setIsZoomAnimating] = useState(false);
   const [panelMode, setPanelMode] = useState<"controls" | "comments">("controls");
-  const [comments, setComments] = useState<CommentData[]>(INIT_COMMENTS);
+  const [comments, setComments] = useState<CommentData[]>([]);
   const canEditMap = currentRole === "owner" || currentRole === "editor";
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -995,6 +931,7 @@ export function CanvasScreen({
   const recommendationRevealRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recommendationAcceptRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recommendationCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recommendationRequestIdRef = useRef(0);
 
   useEffect(() => { stateRef.current = { pan, zoom }; }, [pan, zoom]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
@@ -1007,21 +944,18 @@ export function CanvasScreen({
   }, []);
 
   useEffect(() => {
-    if (!/^\d+$/.test(mapId)) return; // 더미 마인드맵은 기존 로컬 데이터 유지
+    setMapLoading(true);
     api.listBlocks(Number(mapId)).then(blocks => {
       const loaded = blocksToLocalNodes(blocks);
-      if (!loaded.length) return;
       setNodes(loaded); nodesRef.current = loaded;
       setEdges(loaded.filter(node => node.parentId).map(node => ({ from: node.parentId!, to: node.id })));
+    }).catch(() => { /* TODO: 전역 API 오류 UI */ })
+      .finally(() => setMapLoading(false));
+    // 노드를 클릭하기 전에도 댓글 개수가 바로 보이도록 맵 전체 댓글을 한 번에 불러온다.
+    api.listCommentsByMap(Number(mapId)).then(items => {
+      setComments(items.map(apiCommentToLocal));
     }).catch(() => { /* TODO: 전역 API 오류 UI */ });
   }, [mapId]);
-
-  useEffect(() => {
-    if (!selectedId || !/^\d+$/.test(selectedId)) return;
-    api.listComments(Number(selectedId)).then(items => {
-      setComments(prev => [...prev.filter(comment => comment.nodeId !== selectedId), ...items.map(apiCommentToLocal)]);
-    }).catch(() => { /* 더미 댓글 유지 */ });
-  }, [selectedId]);
 
   // Native wheel listener (passive: false required for preventDefault)
   useEffect(() => {
@@ -1049,7 +983,7 @@ export function CanvasScreen({
   const handleViewportPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // Nodes call stopPropagation, so this only fires on background
     setSelectedId(null);
-    setRecommendations(null);
+    clearRecommendations();
     dragRef.current = {
       type: "pan",
       nodeId: null,
@@ -1089,7 +1023,7 @@ export function CanvasScreen({
     if (Math.hypot(dx, dy) > 5) d.moved = true;
     if (d.type === "pan") {
       setPan({ x: d.startValue.x + dx, y: d.startValue.y + dy });
-    } else if (d.type === "node" && d.nodeId && d.nodeId !== "root") {
+    } else if (d.type === "node" && d.nodeId && nodesRef.current.find(n => n.id === d.nodeId)?.parentId !== null) {
       const z = stateRef.current.zoom;
       setNodes(prev => {
         const next = prev.map(n =>
@@ -1125,7 +1059,7 @@ export function CanvasScreen({
     if (!node) return;
     setEditingId(nodeId);
     setEditText(node.text);
-    setRecommendations(null);
+    clearRecommendations();
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
   };
 
@@ -1133,7 +1067,7 @@ export function CanvasScreen({
     if (!editingId) return;
     const content = editText.trim();
     setNodes(prev => prev.map(n => n.id === editingId ? { ...n, text: content || n.text } : n));
-    if (content && /^\d+$/.test(editingId)) api.updateBlock(Number(editingId), { content }).catch(() => { /* TODO: optimistic rollback/toast */ });
+    if (content) api.updateBlock(Number(editingId), { content }).catch(() => { /* TODO: optimistic rollback/toast */ });
     setEditingId(null);
   };
 
@@ -1143,13 +1077,11 @@ export function CanvasScreen({
     if (!canEditMap) return;
     const parent = nodes.find(n => n.id === parentId)!;
     const siblings = nodes.filter(n => n.parentId === parentId);
-    let newId = genId();
-    if (/^\d+$/.test(mapId) && /^\d+$/.test(parentId)) {
-      try {
-        const created = await api.createBlock(Number(mapId), "새 아이디어", Number(parentId), HEX_API_COLOR[parent.color]);
-        newId = String(created.id);
-      } catch { return; }
-    }
+    let newId: string;
+    try {
+      const created = await api.createBlock(Number(mapId), "새 아이디어", Number(parentId), HEX_API_COLOR[parent.color]);
+      newId = String(created.id);
+    } catch { return; }
     const newNode: NodeData = {
       id: newId,
       text: "새 아이디어",
@@ -1169,7 +1101,8 @@ export function CanvasScreen({
 
   const deleteNode = (nodeId: string) => {
     if (!canEditMap) return;
-    if (nodeId === "root") return;
+    const target = nodes.find(n => n.id === nodeId);
+    if (!target || target.parentId === null) return;
     const toDelete = new Set<string>();
     const collect = (id: string) => {
       toDelete.add(id);
@@ -1179,11 +1112,12 @@ export function CanvasScreen({
     setNodes(prev => prev.filter(n => !toDelete.has(n.id)));
     setEdges(prev => prev.filter(e => !toDelete.has(e.from) && !toDelete.has(e.to)));
     setSelectedId(null);
-    if (/^\d+$/.test(nodeId)) api.deleteBlock(Number(nodeId)).catch(() => { /* TODO: optimistic rollback/toast */ });
+    api.deleteBlock(Number(nodeId)).catch(() => { /* TODO: optimistic rollback/toast */ });
   };
 
   const requestDelete = (nodeId: string) => {
-    if (nodeId !== "root") setPendingDeleteId(nodeId);
+    const target = nodes.find(n => n.id === nodeId);
+    if (target && target.parentId !== null) setPendingDeleteId(nodeId);
   };
 
   // ── Color ──
@@ -1191,7 +1125,7 @@ export function CanvasScreen({
   const changeColor = (nodeId: string, color: string) => {
     if (!canEditMap) return;
     setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, color } : n));
-    if (/^\d+$/.test(nodeId)) api.updateBlock(Number(nodeId), { color: HEX_API_COLOR[color] }).catch(() => { /* TODO: optimistic rollback/toast */ });
+    api.updateBlock(Number(nodeId), { color: HEX_API_COLOR[color] }).catch(() => { /* TODO: optimistic rollback/toast */ });
   };
 
   const autoArrangeChildren = (parentId: string) => {
@@ -1199,7 +1133,7 @@ export function CanvasScreen({
     const children = nodes.filter(node => node.parentId === parentId);
     if (!parent || children.length === 0) return;
 
-    const root = nodes.find(node => node.id === "root") ?? parent;
+    const root = nodes.find(node => node.parentId === null) ?? parent;
     const arranged = nodes.map(node => ({ ...node }));
     const byId = new Map(arranged.map(node => [node.id, node]));
     const childNodes = (id: string) => arranged.filter(node => node.parentId === id).sort((a, b) => a.y - b.y);
@@ -1214,7 +1148,7 @@ export function CanvasScreen({
       items.forEach(child => {
         const span = subtreeUnits(child.id) * unitHeight;
         const target = byId.get(child.id)!;
-        target.x = parentNode.x + direction * (parentNode.id === "root" ? 290 : 240);
+        target.x = parentNode.x + direction * (parentNode.parentId === null ? 290 : 240);
         target.y = cursor + span / 2;
         cursor += span;
         const descendants = childNodes(child.id);
@@ -1222,7 +1156,7 @@ export function CanvasScreen({
       });
     };
 
-    if (parentId === "root") {
+    if (parent.parentId === null) {
       const left = children.filter(child => child.x < parent.x);
       const right = children.filter(child => child.x >= parent.x);
       if (left.length) layoutGroup(byId.get(parentId)!, left, -1);
@@ -1233,7 +1167,7 @@ export function CanvasScreen({
 
     const next = relaxNodeCollisions(arranged, new Set([parentId]));
 
-    setRecommendations(null);
+    clearRecommendations();
     setIsAutoArranging(true);
     nodesRef.current = next;
     setNodes(next);
@@ -1289,21 +1223,47 @@ export function CanvasScreen({
     window.setTimeout(() => setIsRecentering(false), 700);
   };
 
+  const clearRecommendations = () => {
+    recommendationRequestIdRef.current += 1;
+    setRecommendations(null);
+    setRecommendationContents([]);
+  };
+
+  const loadRecommendationsFor = async (nodeId: string) => {
+    const requestId = ++recommendationRequestIdRef.current;
+    const blockId = Number(nodeId);
+    let attempts = 0;
+    const maxAttempts = 10;
+    while (requestId === recommendationRequestIdRef.current && attempts < maxAttempts) {
+      const items = await api.getRecommendations(blockId).catch(() => []);
+      if (requestId !== recommendationRequestIdRef.current) return;
+      if (items.length) {
+        setRecommendationContents(items.slice(0, 3).map(item => item.content));
+        // 추천 단어(10~20초 소요)가 준비된 뒤에야 펼쳐지는 애니메이션을 재생한다.
+        // 준비되기 전에 미리 재생해두면 내용이 도착했을 때 애니메이션 없이 바로 나타나 버린다.
+        recommendationRevealRef.current = setTimeout(() => {
+          setRecommendations(current => current && current.sourceId === nodeId ? { ...current, visible: true } : current);
+        }, 40);
+        return;
+      }
+      attempts += 1;
+      if (attempts < maxAttempts) await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  };
+
   const scheduleRecommendations = (nodeId: string, delay = 720, preserveCollapsing = false) => {
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
     if (recommendationRevealRef.current) clearTimeout(recommendationRevealRef.current);
-    if (!preserveCollapsing) setRecommendations(null);
+    if (!preserveCollapsing) clearRecommendations();
     setHoveredRecommendationId(null);
     setAcceptingRecommendationId(null);
 
-    // 중앙 정렬이 끝난 뒤, 시작점에서 목표 위치로 뻗어 나오게 두 단계로 표시한다.
     recommendationTimerRef.current = setTimeout(() => {
       const source = nodesRef.current.find(node => node.id === nodeId);
       if (!source) return;
+      // 추천 단어가 도착하기 전까지는 visible: false로 멈춰두고, 내용이 준비되면 펼쳐진다.
       setRecommendations({ sourceId: nodeId, sourceX: source.x, sourceY: source.y, visible: false });
-      recommendationRevealRef.current = setTimeout(() => {
-        setRecommendations({ sourceId: nodeId, sourceX: source.x, sourceY: source.y, visible: true });
-      }, 40);
+      loadRecommendationsFor(nodeId);
     }, delay);
   };
 
@@ -1316,30 +1276,35 @@ export function CanvasScreen({
     recommendationAcceptRef.current = setTimeout(() => {
       setAcceptingRecommendationId(null);
     }, 180);
-    recommendationCommitRef.current = setTimeout(() => {
-      const newId = genId();
-      setNodes(prev => [...prev, {
-        id: newId,
-        text: item.text,
-        x: item.x,
-        y: item.y,
-        color: item.color,
-        parentId,
-      }]);
-      setEdges(prev => [...prev, { from: parentId, to: newId }]);
-      setRecommendations(null);
-      setHoveredRecommendationId(null);
-      setSelectedId(newId);
+    recommendationCommitRef.current = setTimeout(async () => {
+      try {
+        const created = await api.applyRecommendation(Number(parentId), item.text);
+        const newId = String(created.id);
+        setNodes(prev => [...prev, {
+          id: newId,
+          text: item.text,
+          x: item.x,
+          y: item.y,
+          color: item.color,
+          parentId,
+        }]);
+        setEdges(prev => [...prev, { from: parentId, to: newId }]);
+        setSelectedId(newId);
+      } catch { /* TODO: 실패 토스트 */ }
+      finally {
+        clearRecommendations();
+        setHoveredRecommendationId(null);
+      }
     }, 380);
   };
 
   const returnToRoot = () => {
     const viewport = viewportRef.current;
-    const root = nodes.find(node => node.id === "root");
+    const root = nodes.find(node => node.parentId === null);
     if (!viewport || !root) return;
     setSelectedId(null);
     setEditingId(null);
-    setRecommendations(null);
+    clearRecommendations();
     const targetZoom = 0.78;
     setIsRecentering(true);
     setZoom(targetZoom);
@@ -1356,12 +1321,12 @@ export function CanvasScreen({
         return source ? { ...source, x: recommendations.sourceX, y: recommendations.sourceY } : null;
       })()
     : null;
-  const recommendationItems: RecommendationItem[] = recommendationSource
+  const recommendationItems: RecommendationItem[] = recommendationSource && recommendationContents.length
     ? placeRecommendations(
         recommendationSource,
         nodes,
-        ["관련 키워드", "새로운 관점", "실행 아이디어"],
-        recommendationSource.id === "root" || recommendationSource.x >= (nodes.find(node => node.id === "root")?.x ?? 600) ? 1 : -1,
+        recommendationContents,
+        recommendationSource.parentId === null || recommendationSource.x >= (nodes.find(node => node.parentId === null)?.x ?? 600) ? 1 : -1,
       )
     : [];
 
@@ -1407,8 +1372,25 @@ export function CanvasScreen({
           공유
         </button>
 
-        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
-          {userInitials}
+        <div className="relative">
+          <button onClick={() => setShowProfileMenu(open => !open)}
+            className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
+            {userInitials}
+          </button>
+          {showProfileMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
+              <div className="absolute right-0 top-full mt-1.5 z-50 w-36 rounded-xl border border-[#E8E7EA] bg-white py-1 shadow-lg">
+                <button
+                  onClick={() => { setShowProfileMenu(false); onLogout?.(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[#717182] hover:bg-[#F8F7F4] hover:text-[#0D0D14]"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  로그아웃
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -1436,7 +1418,7 @@ export function CanvasScreen({
           </ToolBtn>
           <ToolBtn
             onClick={() => selectedId && requestDelete(selectedId)}
-            disabled={!selectedId || selectedId === "root" || !canEditMap}
+            disabled={!selectedId || selectedNode?.parentId === null || !canEditMap}
             title="노드 삭제"
             danger>
             <Trash2 className="w-4 h-4" style={{ color: "#F87171" }} />
@@ -1462,6 +1444,12 @@ export function CanvasScreen({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
         >
+          {mapLoading && nodes.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-[#ABABAB] pointer-events-none">
+              마인드맵을 불러오는 중...
+            </div>
+          )}
+
           {/* Dot grid */}
           <div className="absolute inset-0 pointer-events-none" style={{
             backgroundImage: "radial-gradient(circle, rgba(15,23,42,0.12) 1px, transparent 1px)",
@@ -1582,7 +1570,7 @@ export function CanvasScreen({
                 onEditCommit={commitEdit}
                 onEditCancel={() => setEditingId(null)}
                 animatePosition={isAutoArranging}
-                commentCount={comments.filter(comment => comment.nodeId === node.id).length}
+                commentCount={comments.filter(comment => comment.nodeId === node.id && !comment.solved).length}
               />
             ))}
           </div>
@@ -1640,7 +1628,7 @@ export function CanvasScreen({
                 style={{ color: "#717182" }}>
                 <Pencil className="w-3 h-3" />
               </button>
-              {selectedId !== "root" && canEditMap && (
+              {selectedNode?.parentId !== null && canEditMap && (
                 <>
                   <div className="w-px h-4 bg-[#E0DFE0]" />
                   <button onClick={() => requestDelete(selectedId!)}
@@ -1710,7 +1698,7 @@ export function CanvasScreen({
                     <Pencil className="w-3.5 h-3.5" />
                     이름 수정
                   </button>
-                  {selectedId !== "root" && canEditMap && (
+                  {selectedNode?.parentId !== null && canEditMap && (
                     <button onClick={() => requestDelete(selectedId!)}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all"
                       style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#F87171" }}>
@@ -1726,19 +1714,15 @@ export function CanvasScreen({
               currentUserId={currentUserId}
               canResolve={canEditMap}
               onCreate={async content => {
-                if (/^\d+$/.test(selectedId!)) {
-                  const created = await api.createComment(Number(selectedId), content);
-                  setComments(prev => [...prev, apiCommentToLocal(created)]);
-                } else {
-                  setComments(prev => [...prev, { id: `comment-${crypto.randomUUID()}`, nodeId: selectedId!, authorId: currentUserId, author: "나", content, solved: false }]);
-                }
+                const created = await api.createComment(Number(selectedId), content);
+                setComments(prev => [...prev, apiCommentToLocal(created)]);
               }}
               onEdit={async (commentId, content) => {
-                if (/^\d+$/.test(commentId)) await api.updateComment(Number(commentId), content);
+                await api.updateComment(Number(commentId), content);
                 setComments(prev => prev.map(comment => comment.id === commentId ? { ...comment, content } : comment));
               }}
               onResolve={async commentId => {
-                if (/^\d+$/.test(commentId)) await api.resolveComment(Number(commentId), true);
+                await api.resolveComment(Number(commentId), true);
                 setComments(prev => prev.map(comment => comment.id === commentId ? { ...comment, solved: true } : comment));
               }}
             />}
@@ -1771,7 +1755,7 @@ export function CanvasScreen({
         </div>
       )}
 
-      {showShare && <ShareModal workspace={workspace} onClose={() => setShowShare(false)} />}
+      {showShare && <ShareModal workspace={workspace} onClose={() => setShowShare(false)} onInvite={onInvite} />}
     </div>
   );
 }
@@ -1873,7 +1857,7 @@ function MindNode({
   animatePosition: boolean;
   commentCount: number;
 }) {
-  const isRoot = node.id === "root";
+  const isRoot = node.parentId === null;
   const dimensions = nodeBounds(node);
 
   return (
@@ -1975,23 +1959,3 @@ function ToolBtn({
   );
 }
 
-// ─── Icon helpers ────────────────────────────────────────────────────────────
-
-function GoogleIcon() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 24 24">
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-    </svg>
-  );
-}
-
-function GitHubIcon() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-    </svg>
-  );
-}

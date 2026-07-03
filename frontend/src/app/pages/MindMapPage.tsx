@@ -7,9 +7,11 @@ interface MindMapPageProps {
   currentUserId?: number;
   currentRole?: "owner" | "editor" | "viewer";
   onBack: () => void;
+  onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
+  onLogout: () => void;
 }
 
-export function MindMapPage({ workspace, map, userInitials, currentUserId, currentRole, onBack }: MindMapPageProps) {
+export function MindMapPage({ workspace, map, userInitials, currentUserId, currentRole, onBack, onInvite, onLogout }: MindMapPageProps) {
   return (
     <CanvasScreen
       workspace={workspace}
@@ -19,7 +21,8 @@ export function MindMapPage({ workspace, map, userInitials, currentUserId, curre
       currentUserId={currentUserId}
       currentRole={currentRole}
       onBack={onBack}
+      onInvite={onInvite}
+      onLogout={onLogout}
     />
   );
 }
-
