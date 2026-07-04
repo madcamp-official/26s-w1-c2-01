@@ -58,3 +58,5 @@ class ConnectionManager:
 manager = ConnectionManager()
 # 워크스페이스 단위 채널 (워크스페이스/멤버/마인드맵 목록 변경) - id 네임스페이스가 겹치므로 별도 인스턴스
 workspace_manager = ConnectionManager()
+# 유저 단위 채널 (초대 알림 등, 아직 워크스페이스 멤버가 아니어도 받아야 하는 이벤트) - id 네임스페이스가 겹치므로 별도 인스턴스
+notification_manager = ConnectionManager()

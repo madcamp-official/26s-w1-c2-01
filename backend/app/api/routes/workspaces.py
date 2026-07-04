@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.connection_manager import workspace_manager
+from app.core.connection_manager import notification_manager, workspace_manager
 from app.core.deps import get_current_user
 from app.core.events import (
+    invitation_event,
     member_event,
     member_removed_event,
     workspace_deleted_event,
@@ -126,7 +127,9 @@ async def invite(
     if existing_invitation is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 초대가 발송되어 응답을 기다리는 중입니다")
 
-    return await create_invitation(db, workspace_id, current_user.id, body.user_id, body.role)
+    invitation = await create_invitation(db, workspace_id, current_user.id, body.user_id, body.role)
+    await notification_manager.broadcast(body.user_id, invitation_event("invitation:created", invitation))
+    return invitation
 
 
 @router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberPublic])

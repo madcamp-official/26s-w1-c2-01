@@ -1,9 +1,10 @@
 from app.models.block import Block
 from app.models.comment import Comment
 from app.models.mindmap import MindMap
-from app.models.workspace import Workspace, WorkspaceMember
+from app.models.workspace import Invitation, Workspace, WorkspaceMember
 from app.schemas.block import BlockPublic
 from app.schemas.comment import CommentPublic
+from app.schemas.invitation import InvitationPublic
 from app.schemas.mindmap import MindMapListItem
 from app.schemas.workspace import WorkspaceMemberPublic, WorkspacePublic
 
@@ -78,3 +79,11 @@ def map_event(event_type: str, mindmap: MindMap, node_count: int) -> dict:
 
 def map_deleted_event(workspace_id: int, map_id: int) -> dict:
     return {"type": "map:deleted", "workspaceId": workspace_id, "mapId": map_id}
+
+
+def invitation_event(event_type: str, invitation: Invitation) -> dict:
+    """invitation:created 이벤트 페이로드, 아직 워크스페이스 멤버가 아닌 초대받은 유저의 알림 채널로 브로드캐스트"""
+    return {
+        "type": event_type,
+        "invitation": InvitationPublic.model_validate(invitation).model_dump(mode="json"),
+    }

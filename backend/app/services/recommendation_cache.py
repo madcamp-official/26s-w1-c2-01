@@ -17,3 +17,8 @@ async def get_cached_recommendations(block_id: int) -> list[dict] | None:
     if raw is None:
         return None
     return json.loads(raw)
+
+
+async def invalidate_recommendations(block_id: int) -> None:
+    """블록의 캐시된 추천을 지운다. 하위 블록이 새로 생겨 제외 목록이 바뀌었을 때 사용."""
+    await _redis_client.delete(_cache_key(block_id))

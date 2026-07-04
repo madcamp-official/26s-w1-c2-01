@@ -2,7 +2,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.block import Block
-from app.models.mindmap import MindMap
 
 
 async def get_block(db: AsyncSession, block_id: int) -> Block | None:
@@ -142,32 +141,3 @@ async def would_create_cycle(db: AsyncSession, block_id: int, new_parent_id: int
             break
         current_id = parent.parent_block_id
     return False
-
-
-async def set_block_embedding(db: AsyncSession, block: Block, embedding: list[float]) -> None:
-    block.embedding = embedding
-    await db.commit()
-
-
-async def find_semantic_neighbors(
-    db: AsyncSession, block: Block, workspace_id: int, limit: int = 5
-) -> list[dict]:
-    """block.content와 사전적(의미적)으로 비슷한 다른 블록들을 워크스페이스 전체에서 찾음"""
-    if block.embedding is None:
-        return []
-
-    stmt = (
-        select(Block, Block.embedding.cosine_distance(block.embedding).label("distance"))
-        .join(MindMap, MindMap.id == Block.map_id)
-        .where(
-            MindMap.workspace_id == workspace_id,
-            Block.id != block.id,
-            Block.embedding.is_not(None),
-        )
-        .order_by("distance")
-        .limit(limit)
-    )
-    result = await db.execute(stmt)
-    rows = result.all()
-    # 코사인 거리(0=완전히 같음 ~ 2=정반대)를 0~1 유사도 점수로 변환
-    return [{"content": b.content, "score": max(0.0, 1 - dist)} for b, dist in rows]

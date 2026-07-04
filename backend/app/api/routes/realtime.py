@@ -2,7 +2,7 @@ import json
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
-from app.core.connection_manager import manager, workspace_manager
+from app.core.connection_manager import manager, notification_manager, workspace_manager
 from app.core.security import decode_token
 from app.crud.mindmap import get_mindmap
 from app.crud.user import get_user_by_id
@@ -108,3 +108,27 @@ async def workspace_socket(websocket: WebSocket, workspace_id: int, token: str =
         pass
     finally:
         workspace_manager.disconnect(workspace_id, websocket)
+
+
+@router.websocket("/ws/users/{user_id}")
+async def user_socket(websocket: WebSocket, user_id: int, token: str = Query(...)) -> None:
+    """
+    유저 단위 실시간 채널 (초대 알림 등)
+
+    워크스페이스 채널과 달리 아직 그 워크스페이스의 멤버가 아닌 상태에서도 받아야 하는 이벤트가
+    있어서(예: 워크스페이스 초대), 워크스페이스 멤버십과 무관하게 본인 토큰인지만 확인한다.
+    """
+    authenticated_user_id = await _authenticate(token)
+    if authenticated_user_id is None or authenticated_user_id != user_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await websocket.accept()
+    notification_manager.connect(user_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        notification_manager.disconnect(user_id, websocket)

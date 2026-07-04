@@ -30,7 +30,7 @@ def generate_recommendations(block_id: int) -> None:
 
 async def _generate_recommendations_async(block_id: int) -> None:
     # 여기서만 쓰는 지연 import: FastAPI api 프로세스 시작 시점에는 필요 없는 것들이라
-    # (특히 embedding 쪽은 무거운 sentence-transformers를 물고 있음) worker 태스크 실행 시점에만 로드
+    # worker 태스크 실행 시점에만 로드
     from app.crud.block import (
         get_block,
         list_ancestor_contents,
@@ -96,12 +96,11 @@ async def _generate_recommendations_async(block_id: int) -> None:
 
 
 async def _fallback_recommendations(block_id: int, content: str, exclude: list[str]) -> list[dict]:
-    """Gemini API 키가 없거나 호출이 실패했을 때만 쓰는 기존 방식: 사전적 유사도(임베딩) + 관련검색어"""
-    from app.crud.block import find_semantic_neighbors, get_block, set_block_embedding
+    """Gemini API 키가 없거나 호출이 실패했을 때만 쓰는 기존 방식: 관련검색어"""
+    from app.crud.block import get_block
     from app.crud.mindmap import get_mindmap
     from app.crud.recommendation_setting import get_or_create_setting
     from app.db import SessionLocal
-    from app.services.embedding import compute_embedding
     from app.services.recommendation import fetch_related_search_terms, merge_recommendations
 
     async with SessionLocal() as db:
@@ -112,19 +111,14 @@ async def _fallback_recommendations(block_id: int, content: str, exclude: list[s
         if mindmap is None:
             return []
         setting = await get_or_create_setting(db, mindmap.workspace_id)
-
-        embedding = compute_embedding(block.content)
-        await set_block_embedding(db, block, embedding)
-        semantic_candidates = await find_semantic_neighbors(db, block, mindmap.workspace_id, limit=5)
         search_weight = setting.search_trend_weight
-        semantic_weight = setting.semantic_weight
 
     search_terms = await fetch_related_search_terms(content, limit=5)
     exclude_keys = {item.strip().lower() for item in exclude}
     return merge_recommendations(
-        semantic_candidates,
+        [],
         search_terms,
-        semantic_weight=semantic_weight,
+        semantic_weight=0.0,
         search_weight=search_weight,
         exclude=exclude_keys,
     )

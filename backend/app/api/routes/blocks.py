@@ -26,6 +26,7 @@ from app.schemas.block import (
     BlockPublic,
     BlockUpdate,
 )
+from app.services.recommendation_cache import invalidate_recommendations
 from app.worker import celery_app
 
 router = APIRouter(tags=["blocks"])
@@ -60,6 +61,9 @@ async def create(
         color=color,
     )
     await manager.broadcast(mindmap.id, block_event("block:created", block))
+    # 부모 입장에서는 하위 블록이 하나 늘었으니, 캐시된 추천에 방금 생성한 단어가
+    # 그대로 남아있지 않도록 무효화 (다음 조회 시 최신 하위 블록 목록을 반영해 재생성됨)
+    await invalidate_recommendations(parent.id)
     # 새 블록이 생겼으니, 이 블록을 기반으로 한 추천을 비동기로 생성 시작
     celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
     return block
@@ -112,8 +116,12 @@ async def update_parent(
             detail="자기 자신의 하위 블록을 부모로 지정할 수 없습니다 (트리에 사이클이 생깁니다)",
         )
 
+    old_parent_id = block.parent_block_id
     updated = await update_block_parent(db, block, body.parent_block_id)
     await manager.broadcast(updated.map_id, block_event("block:reparented", updated))
+    # 이전 부모와 새 부모 모두 하위 블록 목록이 바뀌었으니 캐시 무효화
+    await invalidate_recommendations(old_parent_id)
+    await invalidate_recommendations(body.parent_block_id)
     return updated
 
 
@@ -126,8 +134,11 @@ async def delete(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="루트 블록은 삭제할 수 없습니다")
 
     map_id = block.map_id
+    parent_id = block.parent_block_id
     deleted_ids = await get_subtree_block_ids(db, block.id)  # 삭제 전에 미리 수집
 
     await delete_block(db, block)
     await manager.broadcast(map_id, block_deleted_event(deleted_ids))
+    # 부모의 하위 블록 목록이 바뀌었으니 캐시 무효화 (삭제된 단어가 다시 추천 가능해짐)
+    await invalidate_recommendations(parent_id)
     return {"message": "블록이 삭제되었습니다 (하위 블록 포함)"}

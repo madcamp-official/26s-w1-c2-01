@@ -19,7 +19,7 @@ from app.schemas.recommendation import (
     RecommendationSettingPublic,
     RecommendationSettingUpdate,
 )
-from app.services.recommendation_cache import get_cached_recommendations
+from app.services.recommendation_cache import get_cached_recommendations, invalidate_recommendations
 from app.worker import celery_app
 
 router = APIRouter(tags=["recommendations"])
@@ -60,6 +60,9 @@ async def apply_recommendation(
         source_type="recommended",
     )
     await manager.broadcast(block.map_id, block_event("block:created", new_block))
+    # 부모(block)의 캐시된 추천에는 방금 선택한 단어가 그대로 남아있으므로 무효화해서
+    # 다음 조회 시 새로 생긴 하위 블록을 반영해 재생성되도록 한다
+    await invalidate_recommendations(block.id)
     # 이 블록도 새로운 아이디어이므로, 여기서부터 또 추천이 이어지도록 chaining
     celery_app.send_task("app.tasks.generate_recommendations", args=[new_block.id])
     return new_block
