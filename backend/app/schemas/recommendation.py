@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class RecommendationItem(BaseModel):
     content: str
     score: float
-    source: Literal["semantic", "search"]
+    source: Literal["semantic", "search", "gemini"]
 
 
 class RecommendationApplyRequest(BaseModel):

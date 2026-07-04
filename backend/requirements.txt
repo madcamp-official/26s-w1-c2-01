@@ -16,3 +16,4 @@ python-multipart==0.0.20    # for FastAPI form parsing
 httpx==0.28.1   # for auto-recommendation
 
 sentence-transformers==3.3.1    # for setence embedding
+google-genai==2.10.0    # for Gemini 기반 추천 단어 생성

@@ -22,6 +22,35 @@ async def list_child_contents(db: AsyncSession, parent_block_id: int) -> list[st
     return list(result.scalars().all())
 
 
+async def list_ancestor_contents(db: AsyncSession, block: Block) -> list[str]:
+    """루트까지 올라가며 조상 노드들의 내용을 모음 (추천에서 이미 나온 단어 제외용)"""
+    contents: list[str] = []
+    visited: set[int] = {block.id}
+    current = block
+    while current.parent_block_id is not None:
+        parent = await get_block(db, current.parent_block_id)
+        if parent is None or parent.id in visited:
+            break    # 예상 못한 순환이 있어도 무한루프 방지
+        contents.append(parent.content)
+        visited.add(parent.id)
+        current = parent
+    return contents
+
+
+async def list_same_color_siblings(
+    db: AsyncSession, map_id: int, color: str, exclude_block_id: int, limit: int = 8
+) -> list[str]:
+    """같은 맵에서 같은 색상을 가진 다른 노드들의 내용 (추천에 '같은 색상 그룹' 맥락을 주기 위함)"""
+    stmt = (
+        select(Block.content)
+        .where(Block.map_id == map_id, Block.color == color, Block.id != exclude_block_id)
+        .order_by(Block.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def count_blocks_grouped_by_map(db: AsyncSession, map_ids: list[int]) -> dict[int, int]:
     """마인드맵 목록 조회(node_count 표시)용, map_id -> 블록 개수"""
     if not map_ids:

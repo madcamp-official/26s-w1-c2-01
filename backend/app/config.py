@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # 프론트엔드 연동용 CORS 허용 origin
     cors_allow_origins: str = "http://localhost:5173"
 
+    # 추천 단어 생성용 Gemini API 키 (없으면 사전적 유사도 + 관련검색어 방식으로 폴백)
+    gemini_api_key: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # list로 변환 (.env는 list 직접 못 넣음)
