@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from app.core.connection_manager import manager, workspace_manager
@@ -51,14 +53,22 @@ async def map_socket(websocket: WebSocket, map_id: int, token: str = Query(...))
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
-        user_info = {"id": user.id, "name": user.name, "email": user.email}
+        user_info = {"id": user.id, "name": user.name, "email": user.email, "selected_block_id": None}
 
     await websocket.accept()
     manager.connect(map_id, websocket, user_info)
     await manager.broadcast(map_id, {"type": "presence:update", "users": manager.list_users(map_id)})
     try:
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            try:
+                payload = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            # 클라이언트 -> 서버: 지금 선택 중인 노드가 바뀔 때마다 알려주면, 다른 접속자에게 presence와 함께 브로드캐스트
+            if payload.get("type") == "selection:update":
+                manager.update_selection(map_id, websocket, payload.get("blockId"))
+                await manager.broadcast(map_id, {"type": "presence:update", "users": manager.list_users(map_id)})
     except WebSocketDisconnect:
         pass
     finally:

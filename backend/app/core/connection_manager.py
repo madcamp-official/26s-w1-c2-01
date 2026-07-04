@@ -22,6 +22,15 @@ class ConnectionManager:
         if not connections:
             self._connections.pop(channel_id, None)
 
+    def update_selection(self, channel_id: int, websocket: WebSocket, block_id: int | None) -> None:
+        """이 연결의 사용자가 지금 선택 중인 노드(블록)를 갱신 (다른 사용자에게 presence와 함께 보여주기 위함)"""
+        connections = self._connections.get(channel_id)
+        if connections is None or websocket not in connections:
+            return
+        info = connections[websocket]
+        if info is not None:
+            info["selected_block_id"] = block_id
+
     def list_users(self, channel_id: int) -> list[dict]:
         """현재 채널에 연결된 유저 목록 (같은 유저가 여러 탭으로 접속해도 한 번만)"""
         connections = self._connections.get(channel_id, {})
