@@ -9,6 +9,10 @@ export interface WorkspacePageProps {
   onLogout: () => void;
   onMemberRoleChange: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
+  onWorkspaceRename: (workspaceId: string, name: string) => Promise<void>;
+  onWorkspaceDelete: (workspaceId: string) => Promise<void>;
+  onMapRename: (workspaceId: string, mapId: string, name: string) => Promise<void>;
+  onMapDelete: (workspaceId: string, mapId: string) => Promise<void>;
 }
 
 export function WorkspacePage({ workspaces, ...props }: WorkspacePageProps) {

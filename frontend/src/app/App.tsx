@@ -21,55 +21,52 @@ function LoadingScreen() {
 }
 
 // 새로고침 시에도 URL의 워크스페이스/맵으로 화면을 그대로 유지하기 위해,
-// workspaces 목록이 로드되면 URL 파라미터로부터 activeWorkspace/activeMap을 다시 찾아 맞춰준다.
+// 별도 state에 복사해두지 않고 매 렌더마다 workspaces 목록 + URL 파라미터에서 직접 찾는다.
+// (workspaces가 막 채워진 시점에 별도 "resolved" state로 한 박자 늦게 반영하면,
+//  그 사이 렌더에서 아직 못 찾은 것으로 오판해 /workspaces로 리다이렉트되는 경쟁 상태가 생긴다)
 function MindMapRoute({
-  user, bootstrapped, workspaces, activeWorkspace, activeMap, onResolve, userInitials, onBack, onInvite, onLogout,
+  user, bootstrapped, workspaces, userInitials, onBack, onInvite, onLogout, onMapRename, onMapDelete,
 }: {
   user: User | null;
   bootstrapped: boolean;
   workspaces: WorkspaceData[];
-  activeWorkspace: WorkspaceData | null;
-  activeMap: MapData | null;
-  onResolve: (workspace: WorkspaceData, map: MapData) => void;
   userInitials: string;
   onBack: () => void;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onLogout: () => void;
+  onMapRename: (workspaceId: string, mapId: string, name: string) => Promise<void>;
+  onMapDelete: (workspaceId: string, mapId: string) => Promise<void>;
 }) {
   const { workspaceId, mapId } = useParams();
   const matchedWorkspace = workspaces.find(workspace => workspace.id === workspaceId);
   const matchedMap = matchedWorkspace?.maps.find(map => map.id === mapId);
 
-  useEffect(() => {
-    if (matchedWorkspace && matchedMap) onResolve(matchedWorkspace, matchedMap);
-  }, [matchedWorkspace, matchedMap]);
-
   if (!user) return bootstrapped ? <Navigate to="/login" replace /> : <LoadingScreen />;
 
-  if (activeWorkspace?.id === workspaceId && activeMap?.id === mapId) {
+  if (matchedWorkspace && matchedMap) {
     return (
       <MindMapPage
-        workspace={activeWorkspace}
-        map={activeMap}
+        workspace={matchedWorkspace}
+        map={matchedMap}
         userInitials={userInitials}
         currentUserId={user.id}
-        currentRole={activeWorkspace.currentRole}
+        currentRole={matchedWorkspace.currentRole}
         onBack={onBack}
         onInvite={onInvite}
         onLogout={onLogout}
+        onMapRename={name => onMapRename(matchedWorkspace.id, matchedMap.id, name)}
+        onMapDelete={async () => { await onMapDelete(matchedWorkspace.id, matchedMap.id); onBack(); }}
       />
     );
   }
 
-  if (!bootstrapped || !matchedWorkspace) return <LoadingScreen />;
+  if (!bootstrapped) return <LoadingScreen />;
   return <Navigate to="/workspaces" replace />;
 }
 
 function AppRoutes() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceData | null>(null);
-  const [activeMap, setActiveMap] = useState<MapData | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceData[]>([]);
   const [invitations, setInvitations] = useState<ApiInvitation[]>([]);
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -102,9 +99,27 @@ function AppRoutes() {
       .finally(() => setBootstrapped(true));
   }, []);
 
+  // ── 실시간(WebSocket): 로그인해 있는 동안 다른 사람이 워크스페이스에 초대하면 즉시 알림 목록에 반영 ──
+  useEffect(() => {
+    if (!user) return;
+    const socket = new WebSocket(api.userSocketUrl(user.id));
+    socket.onmessage = event => {
+      let data: any;
+      try { data = JSON.parse(event.data); } catch { return; }
+      if (data.type === "invitation:created") {
+        setInvitations(prev => prev.some(item => item.id === data.invitation.id) ? prev : [data.invitation, ...prev]);
+      }
+    };
+    return () => socket.close();
+  }, [user?.id]);
+
   const openCanvas = (workspace: WorkspaceData, map: MapData) => {
-    setActiveWorkspace(workspace);
-    setActiveMap(map);
+    // WorkspaceScreen/InvitationScreen은 새 마인드맵 생성 시 자기 자신의 로컬 workspaces 사본만
+    // 갱신하므로, MindMapRoute가 참조하는 이 최상위 workspaces state에도 반영해둬야
+    // 생성 직후 바로 해당 캔버스로 진입할 수 있다 (없으면 못 찾아 /workspaces로 튕겨나간다).
+    setWorkspaces(prev => prev.some(item => item.id === workspace.id)
+      ? prev.map(item => item.id === workspace.id ? workspace : item)
+      : [...prev, workspace]);
     navigate(`/workspaces/${workspace.id}/maps/${map.id}`);
   };
 
@@ -119,6 +134,30 @@ function AppRoutes() {
     const match = results.find(candidate => candidate.email.toLowerCase() === email.toLowerCase());
     if (!match) throw new Error("해당 이메일의 사용자를 찾을 수 없습니다");
     await api.inviteToWorkspace(Number(workspaceId), match.id, role);
+  };
+
+  const renameWorkspace = async (workspaceId: string, name: string) => {
+    await api.updateWorkspace(Number(workspaceId), name);
+    setWorkspaces(prev => prev.map(workspace => workspace.id === workspaceId ? { ...workspace, name } : workspace));
+  };
+
+  const deleteWorkspace = async (workspaceId: string) => {
+    await api.deleteWorkspace(Number(workspaceId));
+    setWorkspaces(prev => prev.filter(workspace => workspace.id !== workspaceId));
+  };
+
+  const renameMap = async (workspaceId: string, mapId: string, name: string) => {
+    await api.updateMap(Number(mapId), name);
+    setWorkspaces(prev => prev.map(workspace => workspace.id !== workspaceId ? workspace : {
+      ...workspace, maps: workspace.maps.map(map => map.id === mapId ? { ...map, name } : map),
+    }));
+  };
+
+  const deleteMap = async (workspaceId: string, mapId: string) => {
+    await api.deleteMap(Number(mapId));
+    setWorkspaces(prev => prev.map(workspace => workspace.id !== workspaceId ? workspace : {
+      ...workspace, maps: workspace.maps.filter(map => map.id !== mapId),
+    }));
   };
 
   return (
@@ -148,7 +187,11 @@ function AppRoutes() {
                 setWorkspaces(prev => prev.map(workspace => workspace.id !== workspaceId ? workspace : {
                   ...workspace, members: workspace.members.map(item => item.id === member.id ? { ...item, role } : item),
                 }));
-              }} />
+              }}
+              onWorkspaceRename={renameWorkspace}
+              onWorkspaceDelete={deleteWorkspace}
+              onMapRename={renameMap}
+              onMapDelete={deleteMap} />
           : <Navigate to="/login" replace />
       } />
       <Route path="/invitations" element={
@@ -168,7 +211,11 @@ function AppRoutes() {
               onReject={async invitationId => {
                 await api.rejectInvitation(invitationId);
                 await loadInvitations();
-              }} />
+              }}
+              onWorkspaceRename={renameWorkspace}
+              onWorkspaceDelete={deleteWorkspace}
+              onMapRename={renameMap}
+              onMapDelete={deleteMap} />
           : <Navigate to="/login" replace />
       } />
       <Route path="/workspaces/:workspaceId/maps/:mapId" element={
@@ -176,13 +223,12 @@ function AppRoutes() {
           user={user}
           bootstrapped={bootstrapped}
           workspaces={workspaces}
-          activeWorkspace={activeWorkspace}
-          activeMap={activeMap}
-          onResolve={(workspace, map) => { setActiveWorkspace(workspace); setActiveMap(map); }}
           userInitials={user ? user.name.split(" ").map(part => part[0]).join("") : ""}
           onBack={() => { if (user) loadWorkspaces(user); navigate("/workspaces"); }}
           onInvite={inviteToWorkspace}
           onLogout={logout}
+          onMapRename={renameMap}
+          onMapDelete={deleteMap}
         />
       } />
       <Route path="*" element={!bootstrapped ? <LoadingScreen /> : <Navigate to={user ? "/workspaces" : "/login"} replace />} />

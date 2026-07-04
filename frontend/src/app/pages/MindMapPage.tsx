@@ -9,9 +9,11 @@ interface MindMapPageProps {
   onBack: () => void;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onLogout: () => void;
+  onMapRename: (name: string) => Promise<void>;
+  onMapDelete: () => Promise<void>;
 }
 
-export function MindMapPage({ workspace, map, userInitials, currentUserId, currentRole, onBack, onInvite, onLogout }: MindMapPageProps) {
+export function MindMapPage({ workspace, map, userInitials, currentUserId, currentRole, onBack, onInvite, onLogout, onMapRename, onMapDelete }: MindMapPageProps) {
   return (
     <CanvasScreen
       workspace={workspace}
@@ -23,6 +25,8 @@ export function MindMapPage({ workspace, map, userInitials, currentUserId, curre
       onBack={onBack}
       onInvite={onInvite}
       onLogout={onLogout}
+      onMapRename={onMapRename}
+      onMapDelete={onMapDelete}
     />
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { api, ApiBlock, ApiComment, ApiInvitation } from "../api/client";
+import { api, ApiBlock, ApiComment, ApiInvitation, ApiRecommendation } from "../api/client";
 import {
   Plus, Share2, Check, X, ArrowLeft, ZoomIn, ZoomOut,
   Trash2, Brain, LogOut, UserPlus, Bell, ChevronRight,
@@ -55,6 +55,66 @@ const apiCommentToLocal = (comment: ApiComment): CommentData => ({
   id: String(comment.id), nodeId: String(comment.block_id), authorId: comment.author.id,
   author: comment.author.name, content: comment.content, solved: comment.solved,
 });
+
+const MEMBER_COLORS = ["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#ec4899"];
+
+// ─── 워크스페이스 화면 실시간(WebSocket) 이벤트 반영 ─────────────────────────
+// 워크스페이스/멤버/마인드맵 목록 변경을 로컬 workspaces 배열에 순수 함수로 반영한다.
+function applyWorkspaceRealtimeEvent(prev: WorkspaceData[], data: any, currentUserId?: number): WorkspaceData[] {
+  switch (data.type) {
+    case "workspace:updated": {
+      const id = String(data.workspace.id);
+      return prev.map(w => w.id === id ? { ...w, name: data.workspace.name } : w);
+    }
+    case "workspace:deleted": {
+      const id = String(data.workspaceId);
+      return prev.filter(w => w.id !== id);
+    }
+    case "member:added":
+    case "member:updated": {
+      const workspaceId = String(data.workspaceId);
+      const m = data.member;
+      return prev.map(w => {
+        if (w.id !== workspaceId) return w;
+        const memberId = String(m.id);
+        if (w.members.some(item => item.id === memberId)) {
+          return { ...w, members: w.members.map(item => item.id === memberId ? { ...item, role: m.role } : item) };
+        }
+        const newMember: MemberData = {
+          id: memberId, userId: m.user.id, name: m.user.name, email: m.user.email, role: m.role,
+          initials: m.user.name.split(" ").map((part: string) => part[0]).join(""),
+          color: MEMBER_COLORS[w.members.length % MEMBER_COLORS.length],
+        };
+        return { ...w, members: [...w.members, newMember] };
+      });
+    }
+    case "member:removed": {
+      const workspaceId = String(data.workspaceId);
+      if (currentUserId && data.userId === currentUserId) return prev.filter(w => w.id !== workspaceId);
+      return prev.map(w => w.id !== workspaceId ? w : { ...w, members: w.members.filter(m => m.userId !== data.userId) });
+    }
+    case "map:created": {
+      const workspaceId = String(data.map.workspace_id);
+      return prev.map(w => {
+        if (w.id !== workspaceId || w.maps.some(map => map.id === String(data.map.id))) return w;
+        const newMap: MapData = { id: String(data.map.id), name: data.map.name, nodeCount: data.map.node_count, updatedAt: "방금" };
+        return { ...w, maps: [...w.maps, newMap] };
+      });
+    }
+    case "map:updated": {
+      const workspaceId = String(data.map.workspace_id);
+      return prev.map(w => w.id !== workspaceId ? w : {
+        ...w, maps: w.maps.map(map => map.id === String(data.map.id) ? { ...map, name: data.map.name, nodeCount: data.map.node_count } : map),
+      });
+    }
+    case "map:deleted": {
+      const workspaceId = String(data.workspaceId);
+      return prev.map(w => w.id !== workspaceId ? w : { ...w, maps: w.maps.filter(map => map.id !== String(data.mapId)) });
+    }
+    default:
+      return prev;
+  }
+}
 
 // ─── Login Screen ───────────────────────────────────────────────────────────
 
@@ -209,6 +269,7 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
 
 export function WorkspaceScreen({
   user, onOpenCanvas, onViewInvitation, onLogout, initialWorkspaces = [], pendingInvitationCount = 0, onMemberRoleChange, onInvite,
+  onWorkspaceRename, onWorkspaceDelete, onMapRename, onMapDelete,
 }: {
   user: { id?: number; name: string; email: string };
   onOpenCanvas: (ws: WorkspaceData, map: MapData) => void;
@@ -218,6 +279,10 @@ export function WorkspaceScreen({
   pendingInvitationCount?: number;
   onMemberRoleChange?: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
   onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
+  onWorkspaceRename?: (workspaceId: string, name: string) => Promise<void>;
+  onWorkspaceDelete?: (workspaceId: string) => Promise<void>;
+  onMapRename?: (workspaceId: string, mapId: string, name: string) => Promise<void>;
+  onMapDelete?: (workspaceId: string, mapId: string) => Promise<void>;
 }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceData[]>(initialWorkspaces);
   const [activeId, setActiveId]     = useState(initialWorkspaces[0]?.id ?? "");
@@ -225,6 +290,10 @@ export function WorkspaceScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateMap, setShowCreateMap] = useState(false);
   const [roleChange, setRoleChange] = useState<{ member: MemberData; role: "editor" | "viewer" } | null>(null);
+  const [renamingWorkspace, setRenamingWorkspace] = useState(false);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const [renamingMap, setRenamingMap] = useState<MapData | null>(null);
+  const [deletingMap, setDeletingMap] = useState<MapData | null>(null);
 
   useEffect(() => {
     setWorkspaces(initialWorkspaces);
@@ -232,6 +301,23 @@ export function WorkspaceScreen({
   }, [initialWorkspaces]);
 
   const ws = workspaces.find(w => w.id === activeId) ?? workspaces[0];
+
+  // 지금 보고 있는 워크스페이스가 사라지면(삭제되거나, 본인이 제거되는 등) 목록의 첫 워크스페이스로 대체
+  useEffect(() => {
+    if (activeId && !workspaces.some(w => w.id === activeId)) setActiveId(workspaces[0]?.id ?? "");
+  }, [workspaces, activeId]);
+
+  // ── 실시간(WebSocket): 워크스페이스 이름/삭제, 멤버, 마인드맵 목록 변화를 반영 ──
+  useEffect(() => {
+    if (!ws) return;
+    const socket = new WebSocket(api.workspaceSocketUrl(Number(ws.id)));
+    socket.onmessage = event => {
+      let data: any;
+      try { data = JSON.parse(event.data); } catch { return; }
+      setWorkspaces(prev => applyWorkspaceRealtimeEvent(prev, data, user.id));
+    };
+    return () => socket.close();
+  }, [ws?.id]);
   const initials = user.name.split(" ").map(n => n[0]).join("");
 
   return (
@@ -312,7 +398,21 @@ export function WorkspaceScreen({
                 {/* Header */}
                 <div className="flex items-start justify-between mb-8">
                   <div>
-                    <h1 className="text-2xl font-semibold text-[#0D0D14] tracking-tight">{ws.name}</h1>
+                    <div className="flex items-center gap-1">
+                      <h1 className="text-2xl font-semibold text-[#0D0D14] tracking-tight">{ws.name}</h1>
+                      {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
+                        <button onClick={() => setRenamingWorkspace(true)} title="워크스페이스 이름 수정"
+                          className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-[#F0EFF5] hover:text-[#0D0D14] transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {ws.currentRole === "owner" && (
+                        <button onClick={() => setDeletingWorkspace(true)} title="워크스페이스 삭제"
+                          className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-red-50 hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                     <p className="text-sm text-[#717182] mt-0.5">
                       멤버 {ws.members.length}명 · 마인드맵 {ws.maps.length}개
                     </p>
@@ -335,17 +435,32 @@ export function WorkspaceScreen({
                   </div>
                   <div className="grid gap-2.5">
                     {ws.maps.length ? ws.maps.map(map => (
-                      <button key={map.id} onClick={() => onOpenCanvas(ws, map)}
-                        className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-[#E8E7EA] hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-100/60 transition-all text-left group">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
-                          <GitBranch className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-[#0D0D14] group-hover:text-indigo-700 transition-colors">{map.name}</p>
-                          <p className="text-xs text-[#717182] mt-0.5">노드 {map.nodeCount}개 · {map.updatedAt} 수정</p>
-                        </div>
+                      <div key={map.id}
+                        className="group flex items-center gap-4 p-4 bg-white rounded-2xl border border-[#E8E7EA] hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-100/60 transition-all">
+                        <button onClick={() => onOpenCanvas(ws, map)}
+                          className="flex flex-1 min-w-0 items-center gap-4 text-left">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
+                            <GitBranch className="w-5 h-5 text-indigo-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-[#0D0D14] group-hover:text-indigo-700 transition-colors truncate">{map.name}</p>
+                            <p className="text-xs text-[#717182] mt-0.5">노드 {map.nodeCount}개 · {map.updatedAt} 수정</p>
+                          </div>
+                        </button>
+                        {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            <button onClick={() => setRenamingMap(map)} title="마인드맵 이름 수정"
+                              className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-[#F0EFF5] hover:text-[#0D0D14] transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setDeletingMap(map)} title="마인드맵 삭제"
+                              className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-red-50 hover:text-red-500 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                         <ChevronRight className="w-4 h-4 text-[#C8C7D0] group-hover:text-indigo-400 transition-colors flex-shrink-0" />
-                      </button>
+                      </div>
                     )) : (
                       <div className="rounded-2xl border border-dashed border-[#E0DFE0] px-4 py-8 text-center text-sm text-[#ABABAB]">
                         아직 마인드맵이 없어요. 새 마인드맵을 만들어보세요.
@@ -449,6 +564,65 @@ export function WorkspaceScreen({
               ...item, members: item.members.map(member => member.id === roleChange.member.id ? { ...member, role: roleChange.role } : member),
             }));
             setRoleChange(null);
+          }}
+        />
+      )}
+      {renamingWorkspace && ws && (
+        <RenameModal
+          title="워크스페이스 이름 수정"
+          label="워크스페이스 이름"
+          initialName={ws.name}
+          onClose={() => setRenamingWorkspace(false)}
+          onSubmit={async name => {
+            await onWorkspaceRename?.(ws.id, name);
+            setWorkspaces(prev => prev.map(item => item.id === ws.id ? { ...item, name } : item));
+            setRenamingWorkspace(false);
+          }}
+        />
+      )}
+      {deletingWorkspace && ws && (
+        <ConfirmModal
+          title="워크스페이스를 삭제할까요?"
+          description={`"${ws.name}" 워크스페이스와 소속된 모든 마인드맵이 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.`}
+          confirmLabel="삭제"
+          danger
+          onCancel={() => setDeletingWorkspace(false)}
+          onConfirm={async () => {
+            await onWorkspaceDelete?.(ws.id);
+            setWorkspaces(prev => prev.filter(item => item.id !== ws.id));
+            setActiveId(prev => prev === ws.id ? "" : prev);
+            setDeletingWorkspace(false);
+          }}
+        />
+      )}
+      {renamingMap && ws && (
+        <RenameModal
+          title="마인드맵 이름 수정"
+          label="마인드맵 이름"
+          initialName={renamingMap.name}
+          onClose={() => setRenamingMap(null)}
+          onSubmit={async name => {
+            await onMapRename?.(ws.id, renamingMap.id, name);
+            setWorkspaces(prev => prev.map(item => item.id !== ws.id ? item : {
+              ...item, maps: item.maps.map(m => m.id === renamingMap.id ? { ...m, name } : m),
+            }));
+            setRenamingMap(null);
+          }}
+        />
+      )}
+      {deletingMap && ws && (
+        <ConfirmModal
+          title="마인드맵을 삭제할까요?"
+          description={`"${deletingMap.name}" 마인드맵과 모든 노드, 댓글이 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.`}
+          confirmLabel="삭제"
+          danger
+          onCancel={() => setDeletingMap(null)}
+          onConfirm={async () => {
+            await onMapDelete?.(ws.id, deletingMap.id);
+            setWorkspaces(prev => prev.map(item => item.id !== ws.id ? item : {
+              ...item, maps: item.maps.filter(m => m.id !== deletingMap.id),
+            }));
+            setDeletingMap(null);
           }}
         />
       )}
@@ -645,12 +819,13 @@ function CreateMindMapModal({ onClose, onCreate }: {
   );
 }
 
-function ConfirmModal({ title, description, confirmLabel, onCancel, onConfirm }: {
+function ConfirmModal({ title, description, confirmLabel, onCancel, onConfirm, danger }: {
   title: string;
   description: string;
   confirmLabel: string;
   onCancel: () => void;
   onConfirm: () => Promise<void> | void;
+  danger?: boolean;
 }) {
   const [submitting, setSubmitting] = useState(false);
   return (
@@ -661,9 +836,64 @@ function ConfirmModal({ title, description, confirmLabel, onCancel, onConfirm }:
         <div className="mt-6 flex justify-end gap-2">
           <button onClick={onCancel} className="rounded-xl border border-[#E0DFE0] px-4 py-2 text-sm font-medium text-[#717182]">취소</button>
           <button disabled={submitting} onClick={async () => { setSubmitting(true); try { await onConfirm(); } finally { setSubmitting(false); } }}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            {submitting ? "변경 중..." : confirmLabel}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}>
+            {submitting ? (danger ? "삭제 중..." : "변경 중...") : confirmLabel}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RenameModal({ title, label, initialName, submitLabel = "저장", onClose, onSubmit }: {
+  title: string;
+  label: string;
+  initialName: string;
+  submitLabel?: string;
+  onClose: () => void;
+  onSubmit: (name: string) => Promise<void>;
+}) {
+  const [name, setName] = useState(initialName);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim() || submitting) return;
+    setSubmitting(true); setError("");
+    try { await onSubmit(name.trim()); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "이름 변경에 실패했습니다"); }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-[#E8E7EA]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0EFF4]">
+          <h3 className="font-semibold text-[#0D0D14]">{title}</h3>
+          <button onClick={onClose} aria-label="닫기"
+            className="w-7 h-7 rounded-full hover:bg-[#F0EFF5] flex items-center justify-center transition-colors">
+            <X className="w-4 h-4 text-[#717182]" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-1.5">{label}</label>
+            <input autoFocus value={name} onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && submit()}
+              className="w-full px-4 py-3 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all" />
+            {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-[#E0DFE0] text-sm text-[#717182] hover:bg-[#F3F2F6] font-medium transition-colors">
+              취소
+            </button>
+            <button onClick={submit}
+              disabled={!name.trim() || submitting}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-40">
+              {submitting ? "저장 중..." : submitLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -889,6 +1119,7 @@ function relaxNodeCollisions(input: NodeData[], pinnedIds = new Set<string>()): 
 
 export function CanvasScreen({
   workspace, mapId, mapName, userInitials, currentUserId, currentRole = workspace.currentRole ?? "editor", onBack, onInvite, onLogout,
+  onMapRename, onMapDelete,
 }: {
   workspace: WorkspaceData;
   mapId: string;
@@ -899,6 +1130,8 @@ export function CanvasScreen({
   onBack: () => void;
   onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onLogout?: () => void;
+  onMapRename?: (name: string) => Promise<void>;
+  onMapDelete?: () => Promise<void>;
 }) {
   const [nodes, setNodes]       = useState<NodeData[]>([]);
   const [edges, setEdges]       = useState<EdgeData[]>([]);
@@ -910,6 +1143,8 @@ export function CanvasScreen({
   const [zoom, setZoom]             = useState(0.78);
   const [showShare, setShowShare]   = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [renamingMap, setRenamingMap] = useState(false);
+  const [deletingMap, setDeletingMap] = useState(false);
   const [isRecentering, setIsRecentering] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationState | null>(null);
@@ -920,6 +1155,8 @@ export function CanvasScreen({
   const [isZoomAnimating, setIsZoomAnimating] = useState(false);
   const [panelMode, setPanelMode] = useState<"controls" | "comments">("controls");
   const [comments, setComments] = useState<CommentData[]>([]);
+  const [liveMapName, setLiveMapName] = useState(mapName);
+  const [presence, setPresence] = useState<{ id: number; name: string; email: string; selected_block_id: number | null }[]>([]);
   const canEditMap = currentRole === "owner" || currentRole === "editor";
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -932,9 +1169,16 @@ export function CanvasScreen({
   const recommendationAcceptRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recommendationCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recommendationRequestIdRef = useRef(0);
+  const recommendationsRef = useRef<RecommendationState | null>(null);
+  const onBackRef = useRef(onBack);
+  const mapSocketRef = useRef<WebSocket | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
 
   useEffect(() => { stateRef.current = { pan, zoom }; }, [pan, zoom]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { recommendationsRef.current = recommendations; }, [recommendations]);
+  useEffect(() => { onBackRef.current = onBack; });
+  useEffect(() => { setLiveMapName(mapName); }, [mapName]);
 
   useEffect(() => () => {
     if (recommendationTimerRef.current) clearTimeout(recommendationTimerRef.current);
@@ -956,6 +1200,112 @@ export function CanvasScreen({
       setComments(items.map(apiCommentToLocal));
     }).catch(() => { /* TODO: 전역 API 오류 UI */ });
   }, [mapId]);
+
+  // ── 실시간(WebSocket): 같은 맵을 보고 있는 다른 사용자의 노드/댓글/추천/접속자 변화를 반영 ──
+  useEffect(() => {
+    const socket = new WebSocket(api.mapSocketUrl(Number(mapId)));
+    mapSocketRef.current = socket;
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ type: "selection:update", blockId: selectedIdRef.current ? Number(selectedIdRef.current) : null }));
+    };
+    socket.onmessage = event => {
+      let data: any;
+      try { data = JSON.parse(event.data); } catch { return; }
+
+      switch (data.type) {
+        case "block:created": {
+          const block = data.block as ApiBlock;
+          const id = String(block.id);
+          const parentId = block.parent_block_id === null ? null : String(block.parent_block_id);
+          setNodes(prev => {
+            if (prev.some(n => n.id === id)) return prev;    // 이미 내 쪽 낙관적 업데이트로 존재
+            const parent = prev.find(n => n.id === parentId);
+            const siblings = prev.filter(n => n.parentId === parentId);
+            const newNode: NodeData = {
+              id, text: block.content, color: API_COLOR_HEX[block.color] ?? API_COLOR_HEX.indigo, parentId,
+              x: parent ? parent.x + 220 : 600,
+              y: parent ? parent.y + (siblings.length * 80) - (siblings.length / 2 * 80) : 370,
+            };
+            const next = relaxNodeCollisions([...prev, newNode]);
+            nodesRef.current = next;
+            return next;
+          });
+          if (parentId) setEdges(prev => prev.some(e => e.to === id) ? prev : [...prev, { from: parentId, to: id }]);
+          break;
+        }
+        case "block:updated":
+        case "block:reparented": {
+          const block = data.block as ApiBlock;
+          const id = String(block.id);
+          const parentId = block.parent_block_id === null ? null : String(block.parent_block_id);
+          setNodes(prev => prev.map(n => n.id === id
+            ? { ...n, text: block.content, color: API_COLOR_HEX[block.color] ?? n.color, parentId }
+            : n));
+          if (data.type === "block:reparented") {
+            setEdges(prev => {
+              const filtered = prev.filter(e => e.to !== id);
+              return parentId ? [...filtered, { from: parentId, to: id }] : filtered;
+            });
+          }
+          break;
+        }
+        case "block:deleted": {
+          const ids = new Set((data.blockIds as number[]).map(String));
+          setNodes(prev => prev.filter(n => !ids.has(n.id)));
+          setEdges(prev => prev.filter(e => !ids.has(e.from) && !ids.has(e.to)));
+          setSelectedId(prev => prev && ids.has(prev) ? null : prev);
+          setEditingId(prev => prev && ids.has(prev) ? null : prev);
+          break;
+        }
+        case "comment:created":
+        case "comment:updated":
+        case "comment:resolved":
+        case "comment:reopened": {
+          const local = apiCommentToLocal(data.comment);
+          setComments(prev => prev.some(c => c.id === local.id) ? prev.map(c => c.id === local.id ? local : c) : [...prev, local]);
+          break;
+        }
+        case "comment:deleted": {
+          const commentId = String(data.commentId);
+          setComments(prev => prev.filter(c => c.id !== commentId));
+          break;
+        }
+        case "recommendation:ready": {
+          const sourceId = String(data.blockId);
+          // 지금 이 노드에 대한 추천을 기다리는 중(아직 펼쳐지지 않음)이었다면, 폴링을 기다리지 않고 바로 반영한다.
+          if (recommendationsRef.current?.sourceId === sourceId && !recommendationsRef.current.visible) {
+            const items = (data.recommendations as ApiRecommendation[]).slice(0, 3).map(item => item.content);
+            setRecommendationContents(items);
+            if (recommendationRevealRef.current) clearTimeout(recommendationRevealRef.current);
+            recommendationRevealRef.current = setTimeout(() => {
+              setRecommendations(current => current && current.sourceId === sourceId ? { ...current, visible: true } : current);
+            }, 40);
+          }
+          break;
+        }
+        case "presence:update":
+          setPresence(data.users);
+          break;
+        case "map:renamed":
+          setLiveMapName(data.name);
+          break;
+        case "map:deleted":
+          onBackRef.current();
+          break;
+        default:
+          break;
+      }
+    };
+    return () => { mapSocketRef.current = null; socket.close(); };
+  }, [mapId]);
+
+  // 지금 선택 중인 노드가 바뀔 때마다 다른 접속자에게 알려서, 서로 어떤 노드를 보고 있는지 실시간으로 공유한다.
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+    const socket = mapSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: "selection:update", blockId: selectedId ? Number(selectedId) : null }));
+  }, [selectedId]);
 
   // Native wheel listener (passive: false required for preventDefault)
   useEffect(() => {
@@ -1090,8 +1440,10 @@ export function CanvasScreen({
       color: parent.color,
       parentId,
     };
-    setNodes(prev => [...prev, newNode]);
-    setEdges(prev => [...prev, { from: parentId, to: newId }]);
+    // 이 실행 중에 같은 블록 생성의 WebSocket 이벤트(block:created)가 먼저 도착해 이미 추가돼 있을 수 있으므로,
+    // id가 이미 있으면 중복 추가하지 않는다 (그렇지 않으면 같은 노드가 두 개로 겹쳐 보이는 버그가 생긴다).
+    setNodes(prev => prev.some(n => n.id === newId) ? prev : [...prev, newNode]);
+    setEdges(prev => prev.some(e => e.to === newId) ? prev : [...prev, { from: parentId, to: newId }]);
     setSelectedId(newId);
     setEditingId(newId);
     setEditText(newNode.text);
@@ -1280,7 +1632,8 @@ export function CanvasScreen({
       try {
         const created = await api.applyRecommendation(Number(parentId), item.text);
         const newId = String(created.id);
-        setNodes(prev => [...prev, {
+        // block:created WebSocket 이벤트가 먼저 도착해 이미 추가돼 있을 수 있으므로 중복 추가 방지
+        setNodes(prev => prev.some(n => n.id === newId) ? prev : [...prev, {
           id: newId,
           text: item.text,
           x: item.x,
@@ -1288,7 +1641,7 @@ export function CanvasScreen({
           color: item.color,
           parentId,
         }]);
-        setEdges(prev => [...prev, { from: parentId, to: newId }]);
+        setEdges(prev => prev.some(e => e.to === newId) ? prev : [...prev, { from: parentId, to: newId }]);
         setSelectedId(newId);
       } catch { /* TODO: 실패 토스트 */ }
       finally {
@@ -1330,6 +1683,16 @@ export function CanvasScreen({
       )
     : [];
 
+  // 지금 다른 사용자가 선택 중인 노드 id -> 그 사용자(들) 목록 (이름/색상 표시용)
+  const remoteSelectionsByNodeId = new Map<string, { name: string; color: string }[]>();
+  presence.forEach(person => {
+    if (person.id === currentUserId || person.selected_block_id == null) return;
+    const nodeId = String(person.selected_block_id);
+    const member = workspace.members.find(m => m.userId === person.id);
+    const entry = { name: person.name, color: member?.color ?? "#6366f1" };
+    remoteSelectionsByNodeId.set(nodeId, [...(remoteSelectionsByNodeId.get(nodeId) ?? []), entry]);
+  });
+
   return (
     <div className="size-full flex flex-col overflow-hidden bg-[#F8F7F4]">
       {/* ── Top bar ── */}
@@ -1342,24 +1705,41 @@ export function CanvasScreen({
         <div className="w-px h-4 bg-[#E0DFE0]" />
         <span className="text-xs text-[#717182]">{workspace.name}</span>
         <ChevronRight className="w-3 h-3 text-[#C8C7D0]" />
-        <span className="text-xs font-semibold text-[#0D0D14]">{mapName}</span>
+        <span className="text-xs font-semibold text-[#0D0D14]">{liveMapName}</span>
+        {canEditMap && (
+          <div className="flex items-center gap-0.5 -ml-1">
+            <button onClick={() => setRenamingMap(true)} title="마인드맵 이름 수정"
+              className="p-1 rounded-lg text-[#ABABAB] hover:bg-[#F0EFF5] hover:text-[#0D0D14] transition-colors">
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button onClick={() => setDeletingMap(true)} title="마인드맵 삭제"
+              className="p-1 rounded-lg text-[#ABABAB] hover:bg-red-50 hover:text-red-500 transition-colors">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         <div className="flex-1" />
 
-        {/* Collaborator avatars */}
-        <div className="flex items-center" style={{ gap: "-6px" }}>
+        {/* 지금 이 마인드맵에 실시간으로 접속해 있는 사용자 */}
+        <div className="flex items-center" style={{ gap: "-6px" }} title="지금 접속 중인 사용자">
           <div className="flex -space-x-1.5">
-            {workspace.members.slice(0, 3).map((m, i) => (
-              <div key={m.id} title={m.name}
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2"
-                style={{ backgroundColor: m.color, borderColor: "#FFFFFF", zIndex: 10 - i }}>
-                {m.initials}
-              </div>
-            ))}
-            {workspace.members.length > 3 && (
+            {presence.slice(0, 4).map((person, i) => {
+              const member = workspace.members.find(m => m.userId === person.id);
+              const initials = member?.initials ?? person.name.split(" ").map(part => part[0]).join("");
+              return (
+                <div key={person.id} title={person.name}
+                  className="relative w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2"
+                  style={{ backgroundColor: member?.color ?? "#6366f1", borderColor: "#FFFFFF", zIndex: 10 - i }}>
+                  {initials}
+                  <span className="absolute -right-0.5 -bottom-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
+                </div>
+              );
+            })}
+            {presence.length > 4 && (
               <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-semibold border-2"
                 style={{ backgroundColor: "#F0EFF4", borderColor: "#FFFFFF", color: "#717182" }}>
-                +{workspace.members.length - 3}
+                +{presence.length - 4}
               </div>
             )}
           </div>
@@ -1571,6 +1951,7 @@ export function CanvasScreen({
                 onEditCancel={() => setEditingId(null)}
                 animatePosition={isAutoArranging}
                 commentCount={comments.filter(comment => comment.nodeId === node.id && !comment.solved).length}
+                remoteSelectors={remoteSelectionsByNodeId.get(node.id) ?? []}
               />
             ))}
           </div>
@@ -1581,10 +1962,15 @@ export function CanvasScreen({
             {Math.round(zoom * 100)}%
           </div>
 
-          <button onClick={returnToRoot} onPointerDown={e => e.stopPropagation()} aria-label="루트 노드로 돌아가기" title="루트 노드로 돌아가기"
-            className="absolute bottom-14 right-4 w-10 h-10 rounded-xl bg-white border border-[#E0DFE0] shadow-lg hover:border-indigo-300 hover:text-indigo-600 flex items-center justify-center transition-colors text-[#717182]">
-            <LocateFixed className="w-5 h-5" />
-          </button>
+          <div className="group absolute bottom-14 right-4">
+            <button onClick={returnToRoot} onPointerDown={e => e.stopPropagation()} aria-label="루트 노드로 돌아가기"
+              className="w-10 h-10 rounded-xl bg-white border border-[#E0DFE0] shadow-lg hover:border-indigo-300 hover:text-indigo-600 flex items-center justify-center transition-colors text-[#717182]">
+              <LocateFixed className="w-5 h-5" />
+            </button>
+            <span className="pointer-events-none absolute right-full top-1/2 z-50 mr-2 -translate-y-1/2 whitespace-nowrap rounded-lg bg-[#0D0D14] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+              루트 노드로 돌아가기
+            </span>
+          </div>
 
           {/* Hint when idle */}
           {!selectedNode && !editingId && (
@@ -1715,7 +2101,9 @@ export function CanvasScreen({
               canResolve={canEditMap}
               onCreate={async content => {
                 const created = await api.createComment(Number(selectedId), content);
-                setComments(prev => [...prev, apiCommentToLocal(created)]);
+                const local = apiCommentToLocal(created);
+                // comment:created WebSocket 이벤트가 먼저 도착해 이미 추가돼 있을 수 있으므로 중복 추가 방지
+                setComments(prev => prev.some(c => c.id === local.id) ? prev : [...prev, local]);
               }}
               onEdit={async (commentId, content) => {
                 await api.updateComment(Number(commentId), content);
@@ -1756,6 +2144,31 @@ export function CanvasScreen({
       )}
 
       {showShare && <ShareModal workspace={workspace} onClose={() => setShowShare(false)} onInvite={onInvite} />}
+      {renamingMap && (
+        <RenameModal
+          title="마인드맵 이름 수정"
+          label="마인드맵 이름"
+          initialName={liveMapName}
+          onClose={() => setRenamingMap(false)}
+          onSubmit={async name => {
+            await onMapRename?.(name);
+            setRenamingMap(false);
+          }}
+        />
+      )}
+      {deletingMap && (
+        <ConfirmModal
+          title="마인드맵을 삭제할까요?"
+          description={`"${liveMapName}" 마인드맵과 모든 노드, 댓글이 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.`}
+          confirmLabel="삭제"
+          danger
+          onCancel={() => setDeletingMap(false)}
+          onConfirm={async () => {
+            await onMapDelete?.();
+            setDeletingMap(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1843,7 +2256,7 @@ function CommentPanel({ comments, currentUserId, canResolve, onCreate, onEdit, o
 
 function MindNode({
   node, selected, editing, editText,
-  onPointerDown, onDoubleClick, onEditChange, onEditCommit, onEditCancel, animatePosition, commentCount,
+  onPointerDown, onDoubleClick, onEditChange, onEditCommit, onEditCancel, animatePosition, commentCount, remoteSelectors,
 }: {
   node: NodeData;
   selected: boolean;
@@ -1856,9 +2269,11 @@ function MindNode({
   onEditCancel: () => void;
   animatePosition: boolean;
   commentCount: number;
+  remoteSelectors: { name: string; color: string }[];
 }) {
   const isRoot = node.parentId === null;
   const dimensions = nodeBounds(node);
+  const remoteColor = remoteSelectors[0]?.color;
 
   return (
     <div
@@ -1878,6 +2293,12 @@ function MindNode({
         <div className="absolute -left-2 -top-3 z-10 flex h-6 min-w-6 items-center justify-center gap-1 rounded-full border-2 border-white bg-[#0D0D14] px-1.5 text-[10px] font-bold text-white shadow-md">
           <MessageCircle className="h-3 w-3" />
           {commentCount}
+        </div>
+      )}
+      {remoteSelectors.length > 0 && !editing && (
+        <div className="absolute -right-2 -top-3 z-10 flex h-6 items-center justify-center whitespace-nowrap rounded-full border-2 border-white px-2 text-[10px] font-bold text-white shadow-md"
+          style={{ backgroundColor: remoteColor }}>
+          {remoteSelectors.map(s => s.name).join(", ")}
         </div>
       )}
       {editing ? (
@@ -1906,7 +2327,10 @@ function MindNode({
             borderRadius: 12,
             background: selected ? node.color + "28" : node.color + "16",
             border: isRoot ? `4px solid ${node.color}` : selected ? `2px solid ${node.color}` : `1px solid ${node.color}50`,
-            boxShadow: selected ? `0 0 0 3px ${node.color}20, 0 8px 32px ${node.color}18` : undefined,
+            boxShadow: [
+              selected ? `0 0 0 3px ${node.color}20, 0 8px 32px ${node.color}18` : null,
+              remoteColor ? `0 0 0 2px ${remoteColor}99` : null,
+            ].filter(Boolean).join(", ") || undefined,
             width: dimensions.width,
             height: dimensions.height,
           }}
@@ -1936,26 +2360,35 @@ function ToolBtn({
   danger?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-25 disabled:cursor-not-allowed"
-      style={{
-        background: active
-          ? "#EEF2FF"
-          : danger
-          ? "#FEF2F2"
-          : "transparent",
-        border: active
-          ? "1px solid #C7D2FE"
-          : danger
-          ? "1px solid #FECACA"
-          : "1px solid #E8E7EA",
-      }}
-    >
-      {children}
-    </button>
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={title}
+        className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+        style={{
+          background: active
+            ? "#EEF2FF"
+            : danger
+            ? "#FEF2F2"
+            : "transparent",
+          border: active
+            ? "1px solid #C7D2FE"
+            : danger
+            ? "1px solid #FECACA"
+            : "1px solid #E8E7EA",
+        }}
+      >
+        {children}
+      </button>
+      {title && (
+        <span
+          className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg bg-[#0D0D14] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
+        >
+          {title}
+        </span>
+      )}
+    </div>
   );
 }
 

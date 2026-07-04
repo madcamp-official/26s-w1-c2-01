@@ -1,4 +1,5 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "");
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, "ws");
 
 export interface ApiUser { id: number; email: string; name: string; }
 export interface ApiMember { id: number; user: ApiUser; role: "owner" | "editor" | "viewer"; joined_at: string; }
@@ -48,9 +49,15 @@ export const api = {
   },
   listWorkspaces: () => request<ApiWorkspace[]>("/workspaces"),
   createWorkspace: (name: string) => request<ApiWorkspace>("/workspaces", { method: "POST", body: JSON.stringify({ name }) }),
+  updateWorkspace: (workspaceId: number, name: string) =>
+    request<ApiWorkspace>(`/workspaces/${workspaceId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteWorkspace: (workspaceId: number) => request<{ message: string }>(`/workspaces/${workspaceId}`, { method: "DELETE" }),
   workspaceDetail: (workspaceId: number) => request<ApiWorkspace>(`/workspaces/${workspaceId}`),
   listMaps: (workspaceId: number) => request<ApiMindMap[]>(`/workspaces/${workspaceId}/maps`),
   createMap: (workspaceId: number, name: string) => request<ApiMindMap>(`/workspaces/${workspaceId}/maps`, { method: "POST", body: JSON.stringify({ name }) }),
+  updateMap: (mapId: number, name: string) =>
+    request<ApiMindMap>(`/maps/${mapId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteMap: (mapId: number) => request<{ message: string }>(`/maps/${mapId}`, { method: "DELETE" }),
   listBlocks: (mapId: number) => request<ApiBlock[]>(`/maps/${mapId}/blocks`),
   createBlock: (mapId: number, content: string, parentBlockId: number, color?: string) =>
     request<ApiBlock>(`/maps/${mapId}/blocks`, { method: "POST", body: JSON.stringify({ content, parent_block_id: parentBlockId, color }) }),
@@ -76,4 +83,7 @@ export const api = {
   getRecommendations: (blockId: number, limit = 6) => request<ApiRecommendation[]>(`/blocks/${blockId}/recommendations?limit=${limit}`),
   applyRecommendation: (blockId: number, content: string) =>
     request<ApiBlock>(`/blocks/${blockId}/recommendations/apply`, { method: "POST", body: JSON.stringify({ content }) }),
+  mapSocketUrl: (mapId: number) => `${WS_BASE_URL}/ws/maps/${mapId}?token=${encodeURIComponent(accessToken ?? "")}`,
+  workspaceSocketUrl: (workspaceId: number) => `${WS_BASE_URL}/ws/workspaces/${workspaceId}?token=${encodeURIComponent(accessToken ?? "")}`,
+  userSocketUrl: (userId: number) => `${WS_BASE_URL}/ws/users/${userId}?token=${encodeURIComponent(accessToken ?? "")}`,
 };
