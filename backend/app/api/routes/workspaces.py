@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.connection_manager import workspace_manager
 from app.core.deps import get_current_user
+from app.core.events import (
+    member_event,
+    member_removed_event,
+    workspace_deleted_event,
+    workspace_event,
+)
 from app.core.workspace_deps import (
     get_current_membership,
     require_owner,
@@ -82,7 +89,9 @@ async def update(
     _membership: WorkspaceMember = Depends(require_write_access),
 ):
     workspace = await _get_workspace_or_404(workspace_id, db)
-    return await update_workspace_name(db, workspace, body.name)
+    updated = await update_workspace_name(db, workspace, body.name)
+    await workspace_manager.broadcast(workspace_id, workspace_event("workspace:updated", updated))
+    return updated
 
 
 @router.delete("/{workspace_id}")
@@ -93,6 +102,7 @@ async def delete(
 ):
     workspace = await _get_workspace_or_404(workspace_id, db)
     await delete_workspace(db, workspace)
+    await workspace_manager.broadcast(workspace_id, workspace_deleted_event(workspace_id))
     return {"message": "워크스페이스가 삭제되었습니다"}
 
 
@@ -141,7 +151,9 @@ async def change_member_role(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="멤버를 찾을 수 없습니다")
     if target.role == "owner":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="owner의 권한은 변경할 수 없습니다")
-    return await update_member_role(db, target, body.role)
+    updated = await update_member_role(db, target, body.role)
+    await workspace_manager.broadcast(workspace_id, member_event("member:updated", workspace_id, updated))
+    return updated
 
 
 @router.delete("/{workspace_id}/members/{user_id}")
@@ -157,4 +169,5 @@ async def remove(
     if target.role == "owner":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="owner는 제거할 수 없습니다")
     await remove_member(db, target)
+    await workspace_manager.broadcast(workspace_id, member_removed_event(workspace_id, user_id))
     return {"message": "멤버가 제거되었습니다"}

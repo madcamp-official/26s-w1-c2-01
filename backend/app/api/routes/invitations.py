@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.connection_manager import workspace_manager
 from app.core.deps import get_current_user
+from app.core.events import member_event
 from app.crud.invitation import (
     accept_invitation,
     get_invitation,
     list_invitations_for_user,
     reject_invitation,
 )
+from app.crud.workspace import get_membership
 from app.db import get_db
 from app.models.user import User
 from app.schemas.invitation import InvitationPublic
@@ -42,6 +45,12 @@ async def accept(
 ):
     invitation = await _get_my_pending_invitation_or_404(invitation_id, current_user, db)
     await accept_invitation(db, invitation)
+    # get_membership으로 다시 조회해 WorkspaceMember.user(lazy="joined")가 확실히 채워진 상태로 브로드캐스트
+    new_member = await get_membership(db, invitation.workspace_id, current_user.id)
+    if new_member is not None:
+        await workspace_manager.broadcast(
+            invitation.workspace_id, member_event("member:added", invitation.workspace_id, new_member)
+        )
     return {"message": "초대를 수락했습니다"}
 
 
