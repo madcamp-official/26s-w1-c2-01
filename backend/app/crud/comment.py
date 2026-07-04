@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.block import Block
 from app.models.comment import Comment
 
 
@@ -20,6 +21,17 @@ async def list_comments_by_block(
     db: AsyncSession, block_id: int, solved: bool | None = None
 ) -> list[Comment]:
     stmt = select(Comment).where(Comment.block_id == block_id)
+    if solved is not None:
+        stmt = stmt.where(Comment.solved == solved)
+    stmt = stmt.order_by(Comment.created_at.asc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def list_comments_by_map(
+    db: AsyncSession, map_id: int, solved: bool | None = None
+) -> list[Comment]:
+    stmt = select(Comment).join(Block, Block.id == Comment.block_id).where(Block.map_id == map_id)
     if solved is not None:
         stmt = stmt.where(Comment.solved == solved)
     stmt = stmt.order_by(Comment.created_at.asc())

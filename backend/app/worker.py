@@ -31,7 +31,7 @@ def generate_recommendations(block_id: int) -> None:
 async def _generate_recommendations_async(block_id: int) -> None:
     # 여기서만 쓰는 지연 import: FastAPI api 프로세스 시작 시점에는 필요 없는 것들이라
     # (특히 embedding 쪽은 무거운 sentence-transformers를 물고 있음) worker 태스크 실행 시점에만 로드
-    from app.crud.block import find_semantic_neighbors, get_block, set_block_embedding
+    from app.crud.block import find_semantic_neighbors, get_block, list_child_contents, set_block_embedding
     from app.crud.mindmap import get_mindmap
     from app.crud.recommendation_setting import get_or_create_setting
     from app.db import SessionLocal, engine
@@ -57,6 +57,12 @@ async def _generate_recommendations_async(block_id: int) -> None:
             # 2) 사전적 유사성 후보 (pgvector 코사인 유사도, 같은 워크스페이스 내 다른 블록들)
             semantic_candidates = await find_semantic_neighbors(db, block, mindmap.workspace_id, limit=5)
 
+            # 원본 단어 자신과 이미 하위 노드로 존재하는 아이디어는 추천에서 제외
+            existing_children = await list_child_contents(db, block.id)
+            exclude_keys = {block.content.strip().lower()} | {
+                child.strip().lower() for child in existing_children
+            }
+
             map_id = block.map_id
             content = block.content
             search_weight = setting.search_trend_weight
@@ -65,12 +71,13 @@ async def _generate_recommendations_async(block_id: int) -> None:
         # 3) 관련검색어 후보 (외부 API 호출 — DB 세션 밖에서, 오래 걸릴 수 있으므로)
         search_terms = await fetch_related_search_terms(content, limit=5)
 
-        # 4) 가중치로 합산 + 정렬 + 중복 제거
+        # 4) 가중치로 합산 + 정렬 + 중복/원본 제거
         combined = merge_recommendations(
             semantic_candidates,
             search_terms,
             semantic_weight=semantic_weight,
             search_weight=search_weight,
+            exclude=exclude_keys,
         )
 
         # 5) Redis에 캐싱 (TTL) — GET /blocks/{id}/recommendations가 이 키를 읽음

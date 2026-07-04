@@ -15,6 +15,13 @@ async def list_blocks_by_map(db: AsyncSession, map_id: int) -> list[Block]:
     return list(result.scalars().all())
 
 
+async def list_child_contents(db: AsyncSession, parent_block_id: int) -> list[str]:
+    """이미 존재하는 하위 노드 내용 목록 (추천에서 중복 제외용)"""
+    stmt = select(Block.content).where(Block.parent_block_id == parent_block_id)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def count_blocks_grouped_by_map(db: AsyncSession, map_ids: list[int]) -> dict[int, int]:
     """마인드맵 목록 조회(node_count 표시)용, map_id -> 블록 개수"""
     if not map_ids:

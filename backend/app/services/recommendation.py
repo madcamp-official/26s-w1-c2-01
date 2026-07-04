@@ -26,15 +26,21 @@ def merge_recommendations(
     semantic_weight: float,
     search_weight: float,
     limit: int = 6,
+    exclude: set[str] | None = None,
 ) -> list[dict]:
-    """사전적 유사성 후보 + 관련검색어 후보를 가중치로 합산해서 하나의 순위 목록으로 만듦"""
+    """사전적 유사성 후보 + 관련검색어 후보를 가중치로 합산해서 하나의 순위 목록으로 만듦
+
+    `exclude`는 원본 블록 내용이나 이미 존재하는 하위 노드처럼, 그대로 다시 추천되면
+    의미 없는 레이블들을 걸러내기 위한 정규화된(strip + lower) 키 집합이다.
+    """
+    excluded_keys = exclude or set()
     scores: dict[str, float] = {}
     display: dict[str, str] = {}
     source: dict[str, str] = {}
 
     for candidate in semantic_candidates:
         key = candidate["content"].strip().lower()
-        if not key:
+        if not key or key in excluded_keys:
             continue
         scores[key] = scores.get(key, 0.0) + candidate["score"] * semantic_weight
         display.setdefault(key, candidate["content"].strip())
@@ -44,7 +50,7 @@ def merge_recommendations(
     for rank, term in enumerate(search_terms):
         term = term.strip()
         key = term.lower()
-        if not key:
+        if not key or key in excluded_keys:
             continue
         rank_score = max(0.0, 1 - rank / total_terms)
         scores[key] = scores.get(key, 0.0) + rank_score * search_weight

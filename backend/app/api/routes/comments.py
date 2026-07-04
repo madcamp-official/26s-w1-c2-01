@@ -10,11 +10,13 @@ from app.core.comment_deps import (
 from app.core.connection_manager import manager
 from app.core.deps import get_current_user
 from app.core.events import comment_deleted_event, comment_event
+from app.core.mindmap_deps import get_mindmap_and_check_membership
 from app.crud.block import get_block
 from app.crud.comment import (
     create_comment,
     delete_comment,
     list_comments_by_block,
+    list_comments_by_map,
     update_comment_content,
     update_comment_solved,
 )
@@ -23,6 +25,7 @@ from app.crud.workspace import get_membership
 from app.db import get_db
 from app.models.block import Block
 from app.models.comment import Comment
+from app.models.mindmap import MindMap
 from app.models.user import User
 from app.schemas.comment import CommentCreate, CommentPublic, CommentSolvedUpdate, CommentUpdate
 
@@ -61,6 +64,17 @@ async def list_by_block(
 ):
     """선택된 노드(블록)의 댓글 목록"""
     return await list_comments_by_block(db, block_id, solved)
+
+
+@router.get("/maps/{map_id}/comments", response_model=list[CommentPublic])
+async def list_by_map(
+    map_id: int,
+    solved: bool | None = Query(default=None, description="true/false로 필터, 생략 시 전체"),
+    db: AsyncSession = Depends(get_db),
+    _mindmap: MindMap = Depends(get_mindmap_and_check_membership),
+):
+    """마인드맵 전체의 댓글 목록 (노드를 선택하지 않아도 댓글 개수를 바로 보여주기 위함)"""
+    return await list_comments_by_map(db, map_id, solved)
 
 
 @router.patch("/comments/{comment_id}", response_model=CommentPublic)
