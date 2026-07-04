@@ -1,4 +1,4 @@
-import { LoginScreen } from "../MindSpaceScreens";
+import { LoginScreen } from "../CoMindScreens";
 
 export interface LoginPageProps {
   onLogin: (name: string, email: string, password: string, isSignUp: boolean) => Promise<void>;

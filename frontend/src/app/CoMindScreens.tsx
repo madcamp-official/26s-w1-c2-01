@@ -144,7 +144,7 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
           <div className="w-9 h-9 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
             <Brain className="w-5 h-5 text-white" />
           </div>
-          <span className="text-white font-semibold text-xl tracking-tight">MindSpace</span>
+          <span className="text-white font-semibold text-xl tracking-tight">CoMind</span>
         </div>
 
         {/* Headline */}
@@ -208,7 +208,7 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
             <div className="w-8 h-8 rounded-xl bg-indigo-500 flex items-center justify-center">
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <span className="text-[#0D0D14] font-semibold text-lg">MindSpace</span>
+            <span className="text-[#0D0D14] font-semibold text-lg">CoMind</span>
           </div>
 
           <div className="mb-8">
@@ -332,7 +332,7 @@ export function WorkspaceScreen({
           <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center">
             <Brain className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="font-semibold text-[#0D0D14] tracking-tight">MindSpace</span>
+          <span className="font-semibold text-[#0D0D14] tracking-tight">CoMind</span>
         </div>
 
         <div className="flex-1" />
@@ -980,7 +980,7 @@ export function InvitationScreen({ invitations, onAccept, onReject, onClose }: {
             </div>
             <h1 className="text-xl font-semibold text-white mb-1 tracking-tight">받은 초대</h1>
             <p className="text-white/60 text-sm">
-              {invitations.length ? `${invitations.length}개의 워크스페이스 초대가 있어요` : "MindSpace에서 팀과 함께 아이디어를 펼쳐보세요"}
+              {invitations.length ? `${invitations.length}개의 워크스페이스 초대가 있어요` : "CoMind에서 팀과 함께 아이디어를 펼쳐보세요"}
             </p>
           </div>
 
@@ -1026,7 +1026,7 @@ export function InvitationScreen({ invitations, onAccept, onReject, onClose }: {
         </div>
 
         <p className="text-center text-xs text-[#ABABAB] mt-5">
-          수락하면 MindSpace 이용약관에 동의하는 것으로 간주됩니다
+          수락하면 CoMind 이용약관에 동의하는 것으로 간주됩니다
         </p>
       </div>
     </div>

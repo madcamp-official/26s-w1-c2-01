@@ -1,4 +1,4 @@
-import { CanvasScreen, MapData, WorkspaceData } from "../MindSpaceScreens";
+import { CanvasScreen, MapData, WorkspaceData } from "../CoMindScreens";
 
 interface MindMapPageProps {
   workspace: WorkspaceData;

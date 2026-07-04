@@ -1,6 +1,7 @@
 services:
   api:
     build: .
+    image: comind-backend:latest
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
     volumes:
@@ -15,7 +16,7 @@ services:
         condition: service_healthy
 
   worker:
-    build: .
+    image: comind-backend:latest
     command: celery -A app.worker.celery_app worker --loglevel=info
     env_file: .env
     volumes:
@@ -25,6 +26,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      api:
+        condition: service_started
 
   db:
     image: pgvector/pgvector:pg16

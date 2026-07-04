@@ -13,7 +13,7 @@ export interface ApiUserSearchResult { id: number; email: string; name: string; 
 
 interface TokenResponse { access_token: string; refresh_token: string; user: ApiUser; }
 
-let accessToken = localStorage.getItem("mindspace.accessToken");
+let accessToken = localStorage.getItem("comind.accessToken");
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -35,16 +35,16 @@ export const api = {
   async login(email: string, password: string) {
     const result = await request<TokenResponse>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
     accessToken = result.access_token;
-    localStorage.setItem("mindspace.accessToken", result.access_token);
-    localStorage.setItem("mindspace.refreshToken", result.refresh_token);
+    localStorage.setItem("comind.accessToken", result.access_token);
+    localStorage.setItem("comind.refreshToken", result.refresh_token);
     return result.user;
   },
   signup: (email: string, password: string, name: string) =>
     request<ApiUser>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, name }) }),
   me: () => request<ApiUser>("/users/me"),
   logout() {
-    localStorage.removeItem("mindspace.accessToken");
-    localStorage.removeItem("mindspace.refreshToken");
+    localStorage.removeItem("comind.accessToken");
+    localStorage.removeItem("comind.refreshToken");
     accessToken = null;
   },
   listWorkspaces: () => request<ApiWorkspace[]>("/workspaces"),

@@ -1,4 +1,4 @@
-import { MapData, MemberData, WorkspaceData, WorkspaceScreen } from "../MindSpaceScreens";
+import { MapData, MemberData, WorkspaceData, WorkspaceScreen } from "../CoMindScreens";
 
 export interface WorkspacePageProps {
   user: { id?: number; name: string; email: string };

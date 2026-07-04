@@ -1,5 +1,5 @@
 import { ApiInvitation } from "../../api/client";
-import { MapData, MemberData, WorkspaceData, InvitationScreen, WorkspaceScreen } from "../MindSpaceScreens";
+import { MapData, MemberData, WorkspaceData, InvitationScreen, WorkspaceScreen } from "../CoMindScreens";
 
 interface InvitationPageProps {
   user: { id?: number; name: string; email: string };
