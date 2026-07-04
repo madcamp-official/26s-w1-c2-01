@@ -269,7 +269,7 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
 
 export function WorkspaceScreen({
   user, onOpenCanvas, onViewInvitation, onLogout, initialWorkspaces = [], pendingInvitationCount = 0, onMemberRoleChange, onInvite,
-  onWorkspaceRename, onWorkspaceDelete, onMapRename, onMapDelete,
+  onWorkspaceRename, onWorkspaceDelete, onMemberRemove, onWorkspaceLeave, onMapRename, onMapDelete,
 }: {
   user: { id?: number; name: string; email: string };
   onOpenCanvas: (ws: WorkspaceData, map: MapData) => void;
@@ -281,6 +281,8 @@ export function WorkspaceScreen({
   onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onWorkspaceRename?: (workspaceId: string, name: string) => Promise<void>;
   onWorkspaceDelete?: (workspaceId: string) => Promise<void>;
+  onMemberRemove?: (workspaceId: string, member: MemberData) => Promise<void>;
+  onWorkspaceLeave?: (workspaceId: string) => Promise<void>;
   onMapRename?: (workspaceId: string, mapId: string, name: string) => Promise<void>;
   onMapDelete?: (workspaceId: string, mapId: string) => Promise<void>;
 }) {
@@ -292,6 +294,8 @@ export function WorkspaceScreen({
   const [roleChange, setRoleChange] = useState<{ member: MemberData; role: "editor" | "viewer" } | null>(null);
   const [renamingWorkspace, setRenamingWorkspace] = useState(false);
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const [removingMember, setRemovingMember] = useState<MemberData | null>(null);
+  const [leavingWorkspace, setLeavingWorkspace] = useState(false);
   const [renamingMap, setRenamingMap] = useState<MapData | null>(null);
   const [deletingMap, setDeletingMap] = useState<MapData | null>(null);
 
@@ -412,6 +416,12 @@ export function WorkspaceScreen({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      {ws.currentRole && ws.currentRole !== "owner" && (
+                        <button onClick={() => setLeavingWorkspace(true)} title="워크스페이스 나가기"
+                          className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-red-50 hover:text-red-500 transition-colors">
+                          <LogOut className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                     <p className="text-sm text-[#717182] mt-0.5">
                       멤버 {ws.members.length}명 · 마인드맵 {ws.maps.length}개
@@ -486,10 +496,16 @@ export function WorkspaceScreen({
                       <p className="text-[11px] text-[#717182] truncate">{m.email}</p>
                     </div>
                     {ws.currentRole === "owner" && m.role !== "owner" ? (
-                      <select value={m.role} onChange={event => setRoleChange({ member: m, role: event.target.value as "editor" | "viewer" })}
-                        className="rounded-lg border border-[#E0DFE0] bg-white px-2 py-1 text-[10px] font-semibold text-[#717182]">
-                        <option value="editor">편집자</option><option value="viewer">뷰어</option>
-                      </select>
+                      <div className="flex items-center gap-1">
+                        <select value={m.role} onChange={event => setRoleChange({ member: m, role: event.target.value as "editor" | "viewer" })}
+                          className="rounded-lg border border-[#E0DFE0] bg-white px-2 py-1 text-[10px] font-semibold text-[#717182]">
+                          <option value="editor">편집자</option><option value="viewer">뷰어</option>
+                        </select>
+                        <button onClick={() => setRemovingMember(m)} title="멤버 제거"
+                          className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-red-50 hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     ) : <span className="text-[10px] font-semibold text-[#717182]">
                       {m.role === "owner" ? "소유자" : m.role === "editor" ? "편집자" : "뷰어"}
                     </span>}
@@ -592,6 +608,37 @@ export function WorkspaceScreen({
             setWorkspaces(prev => prev.filter(item => item.id !== ws.id));
             setActiveId(prev => prev === ws.id ? "" : prev);
             setDeletingWorkspace(false);
+          }}
+        />
+      )}
+      {removingMember && ws && (
+        <ConfirmModal
+          title="멤버를 제거할까요?"
+          description={`${removingMember.name}님을 이 워크스페이스에서 제거합니다.`}
+          confirmLabel="제거"
+          danger
+          onCancel={() => setRemovingMember(null)}
+          onConfirm={async () => {
+            await onMemberRemove?.(ws.id, removingMember);
+            setWorkspaces(prev => prev.map(item => item.id !== ws.id ? item : {
+              ...item, members: item.members.filter(member => member.id !== removingMember.id),
+            }));
+            setRemovingMember(null);
+          }}
+        />
+      )}
+      {leavingWorkspace && ws && (
+        <ConfirmModal
+          title="워크스페이스를 나가시겠어요?"
+          description={`"${ws.name}" 워크스페이스에서 나가면 다시 초대받기 전까지 접근할 수 없습니다.`}
+          confirmLabel="나가기"
+          danger
+          onCancel={() => setLeavingWorkspace(false)}
+          onConfirm={async () => {
+            await onWorkspaceLeave?.(ws.id);
+            setWorkspaces(prev => prev.filter(item => item.id !== ws.id));
+            setActiveId(prev => prev === ws.id ? "" : prev);
+            setLeavingWorkspace(false);
           }}
         />
       )}

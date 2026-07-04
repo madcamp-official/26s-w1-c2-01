@@ -174,3 +174,20 @@ async def remove(
     await remove_member(db, target)
     await workspace_manager.broadcast(workspace_id, member_removed_event(workspace_id, user_id))
     return {"message": "멤버가 제거되었습니다"}
+
+
+@router.post("/{workspace_id}/leave")
+async def leave(
+    workspace_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    membership: WorkspaceMember = Depends(get_current_membership),
+):
+    if membership.role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="owner는 워크스페이스를 나갈 수 없습니다. 워크스페이스를 삭제해주세요",
+        )
+    await remove_member(db, membership)
+    await workspace_manager.broadcast(workspace_id, member_removed_event(workspace_id, current_user.id))
+    return {"message": "워크스페이스에서 나갔습니다"}

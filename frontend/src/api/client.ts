@@ -74,6 +74,10 @@ export const api = {
     request<ApiComment>(`/comments/${commentId}/solved`, { method: "PATCH", body: JSON.stringify({ solved }) }),
   updateMemberRole: (workspaceId: number, userId: number, role: "editor" | "viewer") =>
     request<ApiMember>(`/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  removeMember: (workspaceId: number, userId: number) =>
+    request<{ message: string }>(`/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" }),
+  leaveWorkspace: (workspaceId: number) =>
+    request<{ message: string }>(`/workspaces/${workspaceId}/leave`, { method: "POST" }),
   searchUsers: (query: string) => request<ApiUserSearchResult[]>(`/users/search?q=${encodeURIComponent(query)}`),
   inviteToWorkspace: (workspaceId: number, userId: number, role: "editor" | "viewer") =>
     request<ApiInvitation>(`/workspaces/${workspaceId}/invite`, { method: "POST", body: JSON.stringify({ user_id: userId, role }) }),

@@ -11,6 +11,8 @@ export interface WorkspacePageProps {
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onWorkspaceRename: (workspaceId: string, name: string) => Promise<void>;
   onWorkspaceDelete: (workspaceId: string) => Promise<void>;
+  onMemberRemove: (workspaceId: string, member: MemberData) => Promise<void>;
+  onWorkspaceLeave: (workspaceId: string) => Promise<void>;
   onMapRename: (workspaceId: string, mapId: string, name: string) => Promise<void>;
   onMapDelete: (workspaceId: string, mapId: string) => Promise<void>;
 }

@@ -146,6 +146,19 @@ function AppRoutes() {
     setWorkspaces(prev => prev.filter(workspace => workspace.id !== workspaceId));
   };
 
+  const removeMember = async (workspaceId: string, member: MemberData) => {
+    if (!member.userId) throw new Error("사용자 ID를 확인할 수 없습니다");
+    await api.removeMember(Number(workspaceId), member.userId);
+    setWorkspaces(prev => prev.map(workspace => workspace.id !== workspaceId ? workspace : {
+      ...workspace, members: workspace.members.filter(item => item.id !== member.id),
+    }));
+  };
+
+  const leaveWorkspace = async (workspaceId: string) => {
+    await api.leaveWorkspace(Number(workspaceId));
+    setWorkspaces(prev => prev.filter(workspace => workspace.id !== workspaceId));
+  };
+
   const renameMap = async (workspaceId: string, mapId: string, name: string) => {
     await api.updateMap(Number(mapId), name);
     setWorkspaces(prev => prev.map(workspace => workspace.id !== workspaceId ? workspace : {
@@ -190,6 +203,8 @@ function AppRoutes() {
               }}
               onWorkspaceRename={renameWorkspace}
               onWorkspaceDelete={deleteWorkspace}
+              onMemberRemove={removeMember}
+              onWorkspaceLeave={leaveWorkspace}
               onMapRename={renameMap}
               onMapDelete={deleteMap} />
           : <Navigate to="/login" replace />
@@ -214,6 +229,8 @@ function AppRoutes() {
               }}
               onWorkspaceRename={renameWorkspace}
               onWorkspaceDelete={deleteWorkspace}
+              onMemberRemove={removeMember}
+              onWorkspaceLeave={leaveWorkspace}
               onMapRename={renameMap}
               onMapDelete={deleteMap} />
           : <Navigate to="/login" replace />
