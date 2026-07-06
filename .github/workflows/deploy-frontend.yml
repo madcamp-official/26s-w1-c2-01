@@ -1,0 +1,53 @@
+name: Deploy Frontend to EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and deploy frontend
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /26s-w1-c2-01
+
+            echo "Pull latest code"
+            git pull --ff-only origin main
+
+            echo "Build frontend"
+            cd frontend
+            npm ci
+            npm run build
+
+            echo "Check frontend build does not contain :8000"
+            if grep -R ":8000" -n dist 2>/dev/null; then
+              echo "ERROR: frontend/dist contains :8000. Check VITE_API_BASE_URL."
+              exit 1
+            fi
+
+            echo "Deploy static files"
+            sudo rsync -av --delete dist/ /var/www/comind/
+
+            echo "Reload nginx"
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+            echo "Frontend deploy completed"
