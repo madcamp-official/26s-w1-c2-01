@@ -81,6 +81,10 @@ async def _generate_recommendations_async(block_id: int) -> None:
             RECOMMENDATION_CACHE_TTL_SECONDS,
             json.dumps(combined),
         )
+        # 생성이 끝났으니 중복 생성 방지 락(app/services/recommendation_cache.py의 try_start_generation)을
+        # 바로 풀어서, TTL(20초)이 다 찰 때까지 기다리지 않고도 재생성이 가능하게 한다.
+        # 워커는 별도 프로세스라 API 쪽 async redis 클라이언트를 그대로 쓰지 않고, 같은 키 규칙만 맞춘다.
+        redis_client.delete(f"block:{block_id}:recommendations:pending")
 
         # 4) API 프로세스에 완료를 알림 (WebSocket 브로드캐스트는 api 프로세스만 할 수 있으므로
         #    Redis pub/sub으로 다리를 놓음 — app/core/recommendation_listener.py가 구독)
@@ -101,7 +105,7 @@ async def _fallback_recommendations(block_id: int, content: str, exclude: list[s
     from app.crud.mindmap import get_mindmap
     from app.crud.recommendation_setting import get_or_create_setting
     from app.db import SessionLocal
-    from app.services.recommendation import fetch_related_search_terms, merge_recommendations
+    from app.services.recommendation import fetch_related_search_terms, merge_recommendations, normalize_dedup_key
 
     async with SessionLocal() as db:
         block = await get_block(db, block_id)
@@ -114,7 +118,7 @@ async def _fallback_recommendations(block_id: int, content: str, exclude: list[s
         search_weight = setting.search_trend_weight
 
     search_terms = await fetch_related_search_terms(content, limit=5)
-    exclude_keys = {item.strip().lower() for item in exclude}
+    exclude_keys = {normalize_dedup_key(item) for item in exclude}
     return merge_recommendations(
         [],
         search_terms,

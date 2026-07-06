@@ -26,7 +26,7 @@ from app.schemas.block import (
     BlockPublic,
     BlockUpdate,
 )
-from app.services.recommendation_cache import invalidate_recommendations
+from app.services.recommendation_cache import invalidate_recommendations, try_start_generation
 from app.worker import celery_app
 
 router = APIRouter(tags=["blocks"])
@@ -65,7 +65,9 @@ async def create(
     # 그대로 남아있지 않도록 무효화 (다음 조회 시 최신 하위 블록 목록을 반영해 재생성됨)
     await invalidate_recommendations(parent.id)
     # 새 블록이 생겼으니, 이 블록을 기반으로 한 추천을 비동기로 생성 시작
-    celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
+    # (곧이어 프론트가 GET으로 폴링하며 같은 블록에 대해 또 큐에 넣으려 할 수 있으므로 락으로 막는다)
+    if await try_start_generation(block.id):
+        celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
     return block
 
 

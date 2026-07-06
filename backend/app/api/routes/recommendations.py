@@ -19,7 +19,11 @@ from app.schemas.recommendation import (
     RecommendationSettingPublic,
     RecommendationSettingUpdate,
 )
-from app.services.recommendation_cache import get_cached_recommendations, invalidate_recommendations
+from app.services.recommendation_cache import (
+    get_cached_recommendations,
+    invalidate_recommendations,
+    try_start_generation,
+)
 from app.worker import celery_app
 
 router = APIRouter(tags=["recommendations"])
@@ -32,9 +36,12 @@ async def get_recommendations(
 ):
     cached = await get_cached_recommendations(block.id)
     if cached is None:
-        # 캐시가 없다 = 아직 처리 전이거나 TTL 만료, 다시 생성 요청만 걸어두고 빈 리스트를 반환
+        # 캐시가 없다 = 아직 처리 전이거나 TTL 만료. 프론트가 완료될 때까지 이 엔드포인트를
+        # 여러 번 폴링하므로, 이미 같은 블록에 대한 생성이 진행 중이면 또 큐에 넣지 않는다
+        # (그렇지 않으면 폴링할 때마다 Gemini 호출이 중복으로 쌓여 rate limit에 쉽게 걸린다)
+        if await try_start_generation(block.id):
+            celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
         # 완료되면 WebSocket recommendation:ready 이벤트로 알아서 push
-        celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
         return []
     return cached[:limit]
 
@@ -64,7 +71,8 @@ async def apply_recommendation(
     # 다음 조회 시 새로 생긴 하위 블록을 반영해 재생성되도록 한다
     await invalidate_recommendations(block.id)
     # 이 블록도 새로운 아이디어이므로, 여기서부터 또 추천이 이어지도록 chaining
-    celery_app.send_task("app.tasks.generate_recommendations", args=[new_block.id])
+    if await try_start_generation(new_block.id):
+        celery_app.send_task("app.tasks.generate_recommendations", args=[new_block.id])
     return new_block
 
 

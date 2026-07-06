@@ -1,6 +1,11 @@
+import logging
+
 from pydantic import BaseModel
 
 from app.config import settings
+from app.services.recommendation import normalize_dedup_key
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_INSTRUCTION = (
     "당신은 마인드맵 브레인스토밍 앱의 연관 단어 추천 엔진입니다. "
@@ -48,7 +53,7 @@ def generate_keyword_suggestions(
     prompt = _build_prompt(content, color_group[:8], exclude[:30], limit)
     try:
         response = _get_client().models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=_SYSTEM_INSTRUCTION,
@@ -59,14 +64,17 @@ def generate_keyword_suggestions(
         )
         parsed = _SuggestionList.model_validate_json(response.text)
     except Exception:
+        # 원인(할당량 초과 429, 일시 장애 503, 응답 스키마 불일치 등)을 알 수 없으면
+        # 폴백만 계속 타는 상황을 디버깅할 방법이 없으므로 반드시 로그를 남긴다
+        logger.warning("Gemini 추천 생성 실패, 관련검색어 폴백으로 전환", exc_info=True)
         return []
 
-    excluded_keys = {item.strip().lower() for item in exclude} | {content.strip().lower()}
+    excluded_keys = {normalize_dedup_key(item) for item in exclude} | {normalize_dedup_key(content)}
     seen: set[str] = set()
     results: list[str] = []
     for word in parsed.suggestions:
+        key = normalize_dedup_key(word)
         word = word.strip()
-        key = word.lower()
         if not word or key in excluded_keys or key in seen:
             continue
         seen.add(key)

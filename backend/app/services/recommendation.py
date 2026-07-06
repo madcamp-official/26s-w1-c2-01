@@ -3,6 +3,15 @@ import json
 import httpx
 
 
+def normalize_dedup_key(text: str) -> str:
+    """추천 중복/제외 판정용 정규화 키.
+
+    앞뒤 공백과 대소문자뿐 아니라 단어 사이 공백 유무까지 같은 표현으로 취급해야,
+    "시작 시점"과 "시작시점"처럼 띄어쓰기만 다른 표현이 서로 다른 추천으로 새어나가지 않는다.
+    """
+    return "".join(text.split()).lower()
+
+
 async def fetch_related_search_terms(query: str, limit: int = 5) -> list[str]:
     """관련검색어 후보를 외부 자동완성 API에서 가져옴"""
     url = "https://duckduckgo.com/ac/"
@@ -35,7 +44,7 @@ def merge_recommendations(
     """사전적 유사성 후보 + 관련검색어 후보를 가중치로 합산해서 하나의 순위 목록으로 만듦
 
     `exclude`는 원본 블록 내용이나 이미 존재하는 하위 노드처럼, 그대로 다시 추천되면
-    의미 없는 레이블들을 걸러내기 위한 정규화된(strip + lower) 키 집합이다.
+    의미 없는 레이블들을 걸러내기 위한 정규화된(`normalize_dedup_key`) 키 집합이다.
     """
     excluded_keys = exclude or set()
     scores: dict[str, float] = {}
@@ -43,7 +52,7 @@ def merge_recommendations(
     source: dict[str, str] = {}
 
     for candidate in semantic_candidates:
-        key = candidate["content"].strip().lower()
+        key = normalize_dedup_key(candidate["content"])
         if not key or key in excluded_keys:
             continue
         scores[key] = scores.get(key, 0.0) + candidate["score"] * semantic_weight
@@ -52,8 +61,8 @@ def merge_recommendations(
 
     total_terms = max(len(search_terms), 1)
     for rank, term in enumerate(search_terms):
+        key = normalize_dedup_key(term)
         term = term.strip()
-        key = term.lower()
         if not key or key in excluded_keys:
             continue
         rank_score = max(0.0, 1 - rank / total_terms)
