@@ -33,22 +33,37 @@ const API_COLOR_HEX: Record<string, string> = {
 const HEX_API_COLOR = Object.fromEntries(Object.entries(API_COLOR_HEX).map(([name, hex]) => [hex, name]));
 
 function blocksToLocalNodes(blocks: ApiBlock[]): NodeData[] {
+  // 좌표는 서버 공유 대상이 아니므로 매번 사용자별 로컬 레이아웃으로 계산한다.
+  // 형제 개수만 보고 중앙 정렬하던 이전 방식은 가지마다 하위 트리 크기가 다르면
+  // 겹침이 생겨서, 각 노드가 차지할 하위 트리 전체 폭(subtree span)을 먼저 구하고
+  // 그 폭만큼 세로 공간을 배분하는 방식으로 바꿔 처음 진입 시에도 겹치지 않게 한다.
   const byParent = new Map<number | null, ApiBlock[]>();
   blocks.forEach(block => byParent.set(block.parent_block_id, [...(byParent.get(block.parent_block_id) ?? []), block]));
+
+  const unitHeight = 120;
+  const subtreeUnits = (block: ApiBlock): number => {
+    const children = byParent.get(block.id) ?? [];
+    return children.length === 0 ? 1 : children.reduce((sum, child) => sum + subtreeUnits(child), 0);
+  };
+
   const result: NodeData[] = [];
-  const place = (block: ApiBlock, depth: number, index: number, siblings: number) => {
+  const place = (block: ApiBlock, depth: number, top: number): number => {
+    const span = subtreeUnits(block) * unitHeight;
     result.push({
       id: String(block.id), parentId: block.parent_block_id === null ? null : String(block.parent_block_id),
       text: block.content, color: API_COLOR_HEX[block.color] ?? API_COLOR_HEX.indigo,
-      // TODO(local-layout): 좌표는 서버 공유 대상이 아니므로 사용자별 로컬 레이아웃으로 계산한다.
-      x: 600 + depth * 250, y: 370 + (index - (siblings - 1) / 2) * 120,
+      x: 600 + depth * 250, y: top + span / 2,
     });
-    const children = byParent.get(block.id) ?? [];
-    children.forEach((child, childIndex) => place(child, depth + 1, childIndex, children.length));
+    let cursor = top;
+    (byParent.get(block.id) ?? []).forEach(child => { cursor = place(child, depth + 1, cursor); });
+    return top + span;
   };
-  const roots = byParent.get(null) ?? [];
-  roots.forEach((root, index) => place(root, 0, index, roots.length));
-  return result;
+
+  let cursor = 0;
+  (byParent.get(null) ?? []).forEach(root => { cursor = place(root, 0, cursor); });
+
+  // 긴 텍스트로 노드 폭이 커져 여전히 겹치는 경우를 대비한 마지막 안전망
+  return relaxNodeCollisions(result);
 }
 
 const apiCommentToLocal = (comment: ApiComment): CommentData => ({
@@ -1353,6 +1368,17 @@ export function CanvasScreen({
       const loaded = blocksToLocalNodes(blocks);
       setNodes(loaded); nodesRef.current = loaded;
       setEdges(loaded.filter(node => node.parentId).map(node => ({ from: node.parentId!, to: node.id })));
+      // '루트 노드로 돌아가기'와 같은 계산으로, 처음 진입했을 때도 루트 노드가 화면 중앙에 오도록 맞춘다.
+      const root = loaded.find(node => node.parentId === null);
+      const viewport = viewportRef.current;
+      if (root && viewport) {
+        const targetZoom = 0.78;
+        setZoom(targetZoom);
+        setPan({
+          x: viewport.clientWidth / 2 - root.x * targetZoom,
+          y: viewport.clientHeight / 2 - root.y * targetZoom,
+        });
+      }
     }).catch(() => { /* TODO: 전역 API 오류 UI */ })
       .finally(() => setMapLoading(false));
     // 노드를 클릭하기 전에도 댓글 개수가 바로 보이도록 맵 전체 댓글을 한 번에 불러온다.
