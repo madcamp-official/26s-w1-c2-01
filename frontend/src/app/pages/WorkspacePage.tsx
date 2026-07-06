@@ -7,6 +7,7 @@ export interface WorkspacePageProps {
   onOpenCanvas: (workspace: WorkspaceData, map: MapData) => void;
   onViewInvitation: () => void;
   onLogout: () => void;
+  onDeleteAccount: () => Promise<void>;
   onMemberRoleChange: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onWorkspaceRename: (workspaceId: string, name: string) => Promise<void>;

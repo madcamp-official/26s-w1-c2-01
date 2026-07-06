@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -91,4 +91,15 @@ async def update_member_role(db: AsyncSession, membership: WorkspaceMember, role
 
 async def remove_member(db: AsyncSession, membership: WorkspaceMember) -> None:
     await db.delete(membership)
+    await db.commit()
+
+
+async def user_owns_any_workspace(db: AsyncSession, user_id: int) -> bool:
+    stmt = select(Workspace.id).where(Workspace.owner_id == user_id).limit(1)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none() is not None
+
+
+async def remove_all_memberships(db: AsyncSession, user_id: int) -> None:
+    await db.execute(delete(WorkspaceMember).where(WorkspaceMember.user_id == user_id))
     await db.commit()

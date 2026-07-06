@@ -42,6 +42,7 @@ export const api = {
   signup: (email: string, password: string, name: string) =>
     request<ApiUser>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, name }) }),
   me: () => request<ApiUser>("/users/me"),
+  deleteAccount: () => request<{ message: string }>("/users/me", { method: "DELETE" }),
   logout() {
     localStorage.removeItem("comind.accessToken");
     localStorage.removeItem("comind.refreshToken");

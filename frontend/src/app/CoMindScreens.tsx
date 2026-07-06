@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { api, ApiBlock, ApiComment, ApiInvitation, ApiRecommendation, ApiUserSearchResult } from "../api/client";
 import {
   Plus, Share2, Check, X, ArrowLeft, ZoomIn, ZoomOut,
-  Trash2, Brain, LogOut, UserPlus, Bell, ChevronRight,
+  Trash2, Brain, LogOut, UserPlus, UserX, Bell, ChevronRight,
   Maximize2, Pencil, GitBranch, LocateFixed,
   ListTree,
   MessageCircle, SlidersHorizontal, CheckCircle2,
@@ -268,13 +268,14 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
 // ─── Workspace Screen ────────────────────────────────────────────────────────
 
 export function WorkspaceScreen({
-  user, onOpenCanvas, onViewInvitation, onLogout, initialWorkspaces = [], pendingInvitationCount = 0, onMemberRoleChange, onInvite,
+  user, onOpenCanvas, onViewInvitation, onLogout, onDeleteAccount, initialWorkspaces = [], pendingInvitationCount = 0, onMemberRoleChange, onInvite,
   onWorkspaceRename, onWorkspaceDelete, onMemberRemove, onWorkspaceLeave, onMapRename, onMapDelete,
 }: {
   user: { id?: number; name: string; email: string };
   onOpenCanvas: (ws: WorkspaceData, map: MapData) => void;
   onViewInvitation: () => void;
   onLogout: () => void;
+  onDeleteAccount?: () => Promise<void>;
   initialWorkspaces?: WorkspaceData[];
   pendingInvitationCount?: number;
   onMemberRoleChange?: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
@@ -298,6 +299,8 @@ export function WorkspaceScreen({
   const [leavingWorkspace, setLeavingWorkspace] = useState(false);
   const [renamingMap, setRenamingMap] = useState<MapData | null>(null);
   const [deletingMap, setDeletingMap] = useState<MapData | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     setWorkspaces(initialWorkspaces);
@@ -347,18 +350,38 @@ export function WorkspaceScreen({
         </button>
 
         {/* User */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-            <span className="text-xs font-bold text-indigo-700">{initials}</span>
-          </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-medium text-[#0D0D14] leading-none">{user.name}</p>
-            <p className="text-[11px] text-[#717182] mt-0.5">{user.email}</p>
-          </div>
-          <button onClick={onLogout}
-            className="ml-1 p-1.5 rounded-lg hover:bg-[#F0EFF5] transition-colors">
-            <LogOut className="w-4 h-4 text-[#717182]" />
+        <div className="relative">
+          <button onClick={() => setShowProfileMenu(open => !open)}
+            className="flex items-center gap-2.5 px-2 py-1 rounded-xl hover:bg-[#F0EFF5] transition-colors">
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+              <span className="text-xs font-bold text-indigo-700">{initials}</span>
+            </div>
+            <div className="hidden sm:block text-left">
+              <p className="text-sm font-medium text-[#0D0D14] leading-none">{user.name}</p>
+              <p className="text-[11px] text-[#717182] mt-0.5">{user.email}</p>
+            </div>
           </button>
+          {showProfileMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
+              <div className="absolute right-0 top-full mt-1.5 z-50 w-40 rounded-xl border border-[#E8E7EA] bg-white py-1 shadow-lg">
+                <button
+                  onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[#717182] hover:bg-[#F8F7F4] hover:text-[#0D0D14]"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  로그아웃
+                </button>
+                <button
+                  onClick={() => { setShowProfileMenu(false); setDeletingAccount(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-500 hover:bg-red-50"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  회원 탈퇴
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </header>
 
@@ -440,10 +463,12 @@ export function WorkspaceScreen({
                 <section>
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-[11px] font-bold text-[#ABABAB] uppercase tracking-widest">마인드맵</h2>
-                    <button onClick={() => setShowCreateMap(true)}
-                      className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 font-semibold">
-                      <Plus className="w-3.5 h-3.5" />새 마인드맵
-                    </button>
+                    {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
+                      <button onClick={() => setShowCreateMap(true)}
+                        className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700 font-semibold">
+                        <Plus className="w-3.5 h-3.5" />새 마인드맵
+                      </button>
+                    )}
                   </div>
                   <div className="grid gap-2.5">
                     {ws.maps.length ? ws.maps.map(map => (
@@ -673,6 +698,12 @@ export function WorkspaceScreen({
             }));
             setDeletingMap(null);
           }}
+        />
+      )}
+      {deletingAccount && (
+        <DeleteAccountModal
+          onCancel={() => setDeletingAccount(false)}
+          onConfirm={async () => { await onDeleteAccount?.(); }}
         />
       )}
     </div>
@@ -921,6 +952,43 @@ function ConfirmModal({ title, description, confirmLabel, onCancel, onConfirm, d
           <button disabled={submitting} onClick={async () => { setSubmitting(true); try { await onConfirm(); } finally { setSubmitting(false); } }}
             className={`rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}>
             {submitting ? (danger ? "삭제 중..." : "변경 중...") : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteAccountModal({ onCancel, onConfirm }: {
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    if (submitting) return;
+    setSubmitting(true); setError("");
+    try { await onConfirm(); }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : "회원 탈퇴에 실패했습니다");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-[#E8E7EA] bg-white p-6 shadow-2xl">
+        <h3 className="text-lg font-semibold text-[#0D0D14]">정말 탈퇴하시겠어요?</h3>
+        <p className="mt-2 text-sm leading-relaxed text-[#717182]">
+          계정을 삭제하면 더 이상 로그인할 수 없고, 이 작업은 되돌릴 수 없습니다.
+        </p>
+        {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-xl border border-[#E0DFE0] px-4 py-2 text-sm font-medium text-[#717182]">취소</button>
+          <button disabled={submitting} onClick={submit}
+            className="rounded-xl bg-red-500 hover:bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {submitting ? "탈퇴 중..." : "회원 탈퇴"}
           </button>
         </div>
       </div>
@@ -1199,7 +1267,7 @@ function relaxNodeCollisions(input: NodeData[], pinnedIds = new Set<string>()): 
 
 export function CanvasScreen({
   workspace, mapId, mapName, userInitials, currentUserId, currentRole = workspace.currentRole ?? "editor", onBack, onInvite, onLogout,
-  onMapRename, onMapDelete,
+  onDeleteAccount, onMapRename, onMapDelete,
 }: {
   workspace: WorkspaceData;
   mapId: string;
@@ -1210,6 +1278,7 @@ export function CanvasScreen({
   onBack: () => void;
   onInvite?: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onLogout?: () => void;
+  onDeleteAccount?: () => Promise<void>;
   onMapRename?: (name: string) => Promise<void>;
   onMapDelete?: () => Promise<void>;
 }) {
@@ -1225,6 +1294,7 @@ export function CanvasScreen({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [renamingMap, setRenamingMap] = useState(false);
   const [deletingMap, setDeletingMap] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [isRecentering, setIsRecentering] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationState | null>(null);
@@ -1842,13 +1912,20 @@ export function CanvasScreen({
           {showProfileMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
-              <div className="absolute right-0 top-full mt-1.5 z-50 w-36 rounded-xl border border-[#E8E7EA] bg-white py-1 shadow-lg">
+              <div className="absolute right-0 top-full mt-1.5 z-50 w-40 rounded-xl border border-[#E8E7EA] bg-white py-1 shadow-lg">
                 <button
                   onClick={() => { setShowProfileMenu(false); onLogout?.(); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[#717182] hover:bg-[#F8F7F4] hover:text-[#0D0D14]"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   로그아웃
+                </button>
+                <button
+                  onClick={() => { setShowProfileMenu(false); setDeletingAccount(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-500 hover:bg-red-50"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  회원 탈퇴
                 </button>
               </div>
             </>
@@ -2249,6 +2326,12 @@ export function CanvasScreen({
             await onMapDelete?.();
             setDeletingMap(false);
           }}
+        />
+      )}
+      {deletingAccount && (
+        <DeleteAccountModal
+          onCancel={() => setDeletingAccount(false)}
+          onConfirm={async () => { await onDeleteAccount?.(); }}
         />
       )}
     </div>

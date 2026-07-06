@@ -8,6 +8,7 @@ interface InvitationPageProps {
   onOpenCanvas: (workspace: WorkspaceData, map: MapData) => void;
   onClose: () => void;
   onLogout: () => void;
+  onDeleteAccount: () => Promise<void>;
   onMemberRoleChange: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onAccept: (invitationId: number) => Promise<void>;
@@ -21,7 +22,7 @@ interface InvitationPageProps {
 }
 
 export function InvitationPage({
-  user, workspaces, invitations, onOpenCanvas, onClose, onLogout, onMemberRoleChange, onInvite, onAccept, onReject,
+  user, workspaces, invitations, onOpenCanvas, onClose, onLogout, onDeleteAccount, onMemberRoleChange, onInvite, onAccept, onReject,
   onWorkspaceRename, onWorkspaceDelete, onMemberRemove, onWorkspaceLeave, onMapRename, onMapDelete,
 }: InvitationPageProps) {
   return (
@@ -33,6 +34,7 @@ export function InvitationPage({
         onOpenCanvas={onOpenCanvas}
         onViewInvitation={() => undefined}
         onLogout={onLogout}
+        onDeleteAccount={onDeleteAccount}
         onMemberRoleChange={onMemberRoleChange}
         onInvite={onInvite}
         onWorkspaceRename={onWorkspaceRename}
