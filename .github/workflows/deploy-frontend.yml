@@ -27,7 +27,7 @@ jobs:
           script: |
             set -e
 
-            cd /26s-w1-c2-01
+            cd 26s-w1-c2-01
 
             echo "Pull latest code"
             git pull --ff-only origin main
