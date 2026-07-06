@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { api, ApiBlock, ApiComment, ApiInvitation, ApiRecommendation } from "../api/client";
+import { api, ApiBlock, ApiComment, ApiInvitation, ApiRecommendation, ApiUserSearchResult } from "../api/client";
 import {
   Plus, Share2, Check, X, ArrowLeft, ZoomIn, ZoomOut,
   Trash2, Brain, LogOut, UserPlus, Bell, ChevronRight,
@@ -427,11 +427,13 @@ export function WorkspaceScreen({
                       멤버 {ws.members.length}명 · 마인드맵 {ws.maps.length}개
                     </p>
                   </div>
-                  <button onClick={() => setShowShare(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-indigo-600/20">
-                    <Share2 className="w-4 h-4" />
-                    워크스페이스 공유
-                  </button>
+                  {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
+                    <button onClick={() => setShowShare(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-indigo-600/20">
+                      <Share2 className="w-4 h-4" />
+                      워크스페이스 공유
+                    </button>
+                  )}
                 </div>
 
                 {/* Maps */}
@@ -445,10 +447,10 @@ export function WorkspaceScreen({
                   </div>
                   <div className="grid gap-2.5">
                     {ws.maps.length ? ws.maps.map(map => (
-                      <div key={map.id}
-                        className="group flex items-center gap-4 p-4 bg-white rounded-2xl border border-[#E8E7EA] hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-100/60 transition-all">
-                        <button onClick={() => onOpenCanvas(ws, map)}
-                          className="flex flex-1 min-w-0 items-center gap-4 text-left">
+                      <div key={map.id} onClick={() => onOpenCanvas(ws, map)} role="button" tabIndex={0}
+                        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenCanvas(ws, map); } }}
+                        className="group flex items-center gap-4 p-4 bg-white rounded-2xl border border-[#E8E7EA] hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-100/60 transition-all cursor-pointer">
+                        <div className="flex flex-1 min-w-0 items-center gap-4 text-left">
                           <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
                             <GitBranch className="w-5 h-5 text-indigo-500" />
                           </div>
@@ -456,14 +458,14 @@ export function WorkspaceScreen({
                             <p className="text-sm font-semibold text-[#0D0D14] group-hover:text-indigo-700 transition-colors truncate">{map.name}</p>
                             <p className="text-xs text-[#717182] mt-0.5">노드 {map.nodeCount}개 · {map.updatedAt} 수정</p>
                           </div>
-                        </button>
+                        </div>
                         {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                            <button onClick={() => setRenamingMap(map)} title="마인드맵 이름 수정"
+                            <button onClick={e => { e.stopPropagation(); setRenamingMap(map); }} title="마인드맵 이름 수정"
                               className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-[#F0EFF5] hover:text-[#0D0D14] transition-colors">
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => setDeletingMap(map)} title="마인드맵 삭제"
+                            <button onClick={e => { e.stopPropagation(); setDeletingMap(map); }} title="마인드맵 삭제"
                               className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-red-50 hover:text-red-500 transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -688,14 +690,30 @@ function ShareModal({ workspace, onClose, onInvite }: {
   const [inviteRole, setInviteRole]   = useState<"editor" | "viewer">("editor");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError]   = useState("");
+  const [suggestions, setSuggestions] = useState<ApiUserSearchResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    const query = inviteEmail.trim();
+    if (query.length < 2) { setSuggestions([]); return; }
+    const seq = ++searchSeq.current;
+    const timer = setTimeout(async () => {
+      const results = await api.searchUsers(query).catch(() => []);
+      if (searchSeq.current === seq) setSuggestions(results);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [inviteEmail]);
 
   const handleInvite = async () => {
-    if (!inviteEmail.trim() || status === "sending") return;
-    setStatus("sending"); setError("");
+    const email = inviteEmail.trim();
+    if (!email || status === "sending") return;
+    setStatus("sending"); setError(""); setShowSuggestions(false);
     try {
-      await onInvite?.(workspace.id, inviteEmail.trim(), inviteRole);
+      await onInvite?.(workspace.id, email, inviteRole);
       setStatus("sent");
       setInviteEmail("");
+      setSuggestions([]);
     } catch (reason) {
       setStatus("error");
       setError(reason instanceof Error ? reason.message : "초대에 실패했습니다");
@@ -718,10 +736,28 @@ function ShareModal({ workspace, onClose, onInvite }: {
           <div>
             <label className="block text-[11px] font-bold text-[#0D0D14] uppercase tracking-wider mb-2">이메일로 초대</label>
             <div className="flex gap-2">
-              <input value={inviteEmail} onChange={e => { setInviteEmail(e.target.value); setStatus("idle"); }}
-                placeholder="동료의 이메일 주소"
-                onKeyDown={e => e.key === "Enter" && handleInvite()}
-                className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all" />
+              <div className="relative flex-1">
+                <input value={inviteEmail}
+                  onChange={e => { setInviteEmail(e.target.value); setStatus("idle"); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
+                  placeholder="동료의 이메일 주소"
+                  onKeyDown={e => e.key === "Enter" && handleInvite()}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all" />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#E8E7EA] rounded-xl shadow-lg z-10 overflow-hidden max-h-48 overflow-y-auto">
+                    {suggestions.map(candidate => (
+                      <button key={candidate.id} type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => { setInviteEmail(candidate.email); setSuggestions([]); setShowSuggestions(false); }}
+                        className="w-full flex flex-col items-start px-3.5 py-2 text-left hover:bg-[#F3F2F6] transition-colors">
+                        <span className="text-sm font-medium text-[#0D0D14]">{candidate.name}</span>
+                        <span className="text-xs text-[#717182]">{candidate.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <select value={inviteRole} onChange={e => setInviteRole(e.target.value as "editor" | "viewer")}
                 className="px-3 py-2 rounded-xl border border-[#E0DFE0] text-sm focus:outline-none bg-white text-[#0D0D14]">
                 <option value="editor">편집자</option>
@@ -990,23 +1026,20 @@ export function InvitationScreen({ invitations, onAccept, onReject, onClose }: {
             )}
             {invitations.map(invitation => (
               <div key={invitation.id} className="p-4 rounded-2xl border border-[#E8E7EA] bg-[#F8F7F4]">
-                <div className="flex items-center gap-3.5 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                    {invitation.inviter.name.split(" ").map(part => part[0]).join("")}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[#0D0D14]">{invitation.inviter.name}</p>
-                    <p className="text-xs text-[#717182]">워크스페이스에 초대했어요</p>
-                  </div>
-                </div>
-
                 <div className="flex items-center gap-3.5 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
-                    {invitation.workspace.name[0]}
+                  <div className="relative w-11 h-11 flex-shrink-0">
+                    <div className="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700">
+                      {invitation.workspace.name[0]}
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-cyan-500 border-2 border-[#F8F7F4] flex items-center justify-center text-white text-[9px] font-bold">
+                      {invitation.inviter.name.split(" ").map(part => part[0]).join("")}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-[#0D0D14]">{invitation.workspace.name}</p>
-                    <p className="text-xs text-[#717182]">역할: {invitation.role === "editor" ? "편집자" : "뷰어"}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#0D0D14] truncate">{invitation.workspace.name}</p>
+                    <p className="text-xs text-[#717182] truncate">
+                      <span className="font-medium text-[#4B4B57]">{invitation.inviter.name}</span>님이 초대함 · {invitation.role === "editor" ? "편집자" : "뷰어"}
+                    </p>
                   </div>
                 </div>
 
@@ -1438,10 +1471,10 @@ export function CanvasScreen({
     const drag = dragRef.current;
     if (drag.type === "node" && drag.nodeId && !drag.moved) {
       centerNode(drag.nodeId);
-      scheduleRecommendations(drag.nodeId);
+      if (canEditMap) scheduleRecommendations(drag.nodeId);
     } else if (drag.type === "node" && drag.nodeId && drag.moved && recommendationDragSourceRef.current === drag.nodeId) {
       // 접히는 짧은 애니메이션 뒤 드롭된 위치에서 다시 펼친다.
-      scheduleRecommendations(drag.nodeId, 460, true);
+      if (canEditMap) scheduleRecommendations(drag.nodeId, 460, true);
     }
     if (drag.type === "node" && drag.nodeId && drag.moved) settleNodeCollisions(drag.nodeId);
     recommendationDragSourceRef.current = null;
@@ -1792,12 +1825,14 @@ export function CanvasScreen({
           </div>
         </div>
 
-        <button onClick={() => setShowShare(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-          style={{ background: "#4F46E5", color: "white" }}>
-          <Share2 className="w-3 h-3" />
-          공유
-        </button>
+        {canEditMap && (
+          <button onClick={() => setShowShare(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            style={{ background: "#4F46E5", color: "white" }}>
+            <Share2 className="w-3 h-3" />
+            공유
+          </button>
+        )}
 
         <div className="relative">
           <button onClick={() => setShowProfileMenu(open => !open)}

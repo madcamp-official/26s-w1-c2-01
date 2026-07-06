@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 
@@ -10,8 +12,10 @@ async def fetch_related_search_terms(query: str, limit: int = 5) -> list[str]:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
-            data = response.json()
-    except (httpx.HTTPError, ValueError):
+            # 응답 헤더에 charset이 없으면 httpx가 인코딩을 추측하다 한글이 깨질 수 있어,
+            # 항상 UTF-8로 고정 디코딩해 자동 감지에 의존하지 않는다
+            data = json.loads(response.content.decode("utf-8"))
+    except (httpx.HTTPError, ValueError, UnicodeDecodeError):
         # 외부 API가 잠깐 죽어도 추천 기능 전체가 죽으면 안 되므로, 빈 리스트로 조용히 폴백
         return []
 

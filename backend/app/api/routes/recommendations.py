@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.block_deps import get_block_and_check_membership, require_block_write_access
+from app.core.block_deps import require_block_write_access
 from app.core.connection_manager import manager
 from app.core.deps import get_current_user
 from app.core.events import block_event
@@ -28,7 +28,7 @@ router = APIRouter(tags=["recommendations"])
 @router.get("/blocks/{block_id}/recommendations", response_model=list[RecommendationItem])
 async def get_recommendations(
     limit: int = Query(default=6, ge=1, le=20),
-    block: Block = Depends(get_block_and_check_membership),
+    block: Block = Depends(require_block_write_access),
 ):
     cached = await get_cached_recommendations(block.id)
     if cached is None:
