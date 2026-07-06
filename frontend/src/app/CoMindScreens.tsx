@@ -2051,7 +2051,7 @@ export function CanvasScreen({
   return (
     <div className="size-full flex flex-col overflow-hidden bg-[#F8F7F4]">
       {/* ── Top bar ── */}
-      <div className="h-12 flex items-center px-2 sm:px-4 gap-1.5 sm:gap-3 flex-shrink-0 border-b border-[#E8E7EA] bg-white z-10 overflow-hidden">
+      <div className="h-12 flex items-center px-2 sm:px-4 gap-1.5 sm:gap-3 flex-shrink-0 border-b border-[#E8E7EA] bg-white z-10">
         <button onClick={onBack}
           className="flex items-center gap-1.5 text-xs font-medium text-[#717182] hover:text-[#0D0D14] transition-colors mr-0.5 sm:mr-1 flex-shrink-0">
           <ArrowLeft className="w-3.5 h-3.5" />
