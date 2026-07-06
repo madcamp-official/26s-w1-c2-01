@@ -1,0 +1,50 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and deploy backend
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            cd 26s-w1-c2-01
+
+            echo "Pull latest code"
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "Check docker compose"
+            docker compose version
+
+            echo "Build and restart api, worker only"
+            cd backend
+            docker compose up -d --build --no-deps api worker
+
+            echo "Remove unused images"
+            docker image prune -f
+
+            echo "Show containers"
+            docker compose ps
+
+            echo "Backend deploy completed"
