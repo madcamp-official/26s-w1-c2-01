@@ -76,16 +76,22 @@ function applyWorkspaceRealtimeEvent(prev: WorkspaceData[], data: any, currentUs
       const m = data.member;
       return prev.map(w => {
         if (w.id !== workspaceId) return w;
+        // 지금 로그인한 본인의 역할이 바뀐 경우, 버튼 활성화 등 권한 기반 UI가
+        // 새로고침 없이 즉시 반영되도록 currentRole도 함께 갱신한다
+        const nextCurrentRole = currentUserId && m.user.id === currentUserId ? m.role : w.currentRole;
         const memberId = String(m.id);
         if (w.members.some(item => item.id === memberId)) {
-          return { ...w, members: w.members.map(item => item.id === memberId ? { ...item, role: m.role } : item) };
+          return {
+            ...w, currentRole: nextCurrentRole,
+            members: w.members.map(item => item.id === memberId ? { ...item, role: m.role } : item),
+          };
         }
         const newMember: MemberData = {
           id: memberId, userId: m.user.id, name: m.user.name, email: m.user.email, role: m.role,
           initials: m.user.name.split(" ").map((part: string) => part[0]).join(""),
           color: MEMBER_COLORS[w.members.length % MEMBER_COLORS.length],
         };
-        return { ...w, members: [...w.members, newMember] };
+        return { ...w, currentRole: nextCurrentRole, members: [...w.members, newMember] };
       });
     }
     case "member:removed": {
@@ -1307,7 +1313,11 @@ export function CanvasScreen({
   const [comments, setComments] = useState<CommentData[]>([]);
   const [liveMapName, setLiveMapName] = useState(mapName);
   const [presence, setPresence] = useState<{ id: number; name: string; email: string; selected_block_id: number | null }[]>([]);
-  const canEditMap = currentRole === "owner" || currentRole === "editor";
+  // 소유자가 멤버 역할(편집자/뷰어)을 바꾸면 워크스페이스 채널로 실시간 반영되도록,
+  // props로 받은 workspace의 스냅샷을 로컬에 두고 웹소켓 이벤트로 갱신한다
+  const [liveWorkspace, setLiveWorkspace] = useState<WorkspaceData>(() => ({ ...workspace, currentRole }));
+  useEffect(() => { setLiveWorkspace({ ...workspace, currentRole }); }, [workspace, currentRole]);
+  const canEditMap = liveWorkspace.currentRole === "owner" || liveWorkspace.currentRole === "editor";
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef     = useRef<DragState>({ type: "idle", nodeId: null, startPointer: { x: 0, y: 0 }, startValue: { x: 0, y: 0 }, moved: false });
@@ -1350,6 +1360,21 @@ export function CanvasScreen({
       setComments(items.map(apiCommentToLocal));
     }).catch(() => { /* TODO: 전역 API 오류 UI */ });
   }, [mapId]);
+
+  // ── 실시간(WebSocket): 워크스페이스 채널 — 소유자가 내 역할을 바꾸면 새로고침 없이 반영 ──
+  useEffect(() => {
+    const socket = new WebSocket(api.workspaceSocketUrl(Number(workspace.id)));
+    socket.onmessage = event => {
+      let data: any;
+      try { data = JSON.parse(event.data); } catch { return; }
+      if (data.type === "workspace:deleted" || (data.type === "member:removed" && data.userId === currentUserId)) {
+        onBackRef.current();
+        return;
+      }
+      setLiveWorkspace(prev => applyWorkspaceRealtimeEvent([prev], data, currentUserId)[0] ?? prev);
+    };
+    return () => socket.close();
+  }, [workspace.id, currentUserId]);
 
   // ── 실시간(WebSocket): 같은 맵을 보고 있는 다른 사용자의 노드/댓글/추천/접속자 변화를 반영 ──
   useEffect(() => {
@@ -1838,7 +1863,7 @@ export function CanvasScreen({
   presence.forEach(person => {
     if (person.id === currentUserId || person.selected_block_id == null) return;
     const nodeId = String(person.selected_block_id);
-    const member = workspace.members.find(m => m.userId === person.id);
+    const member = liveWorkspace.members.find(m => m.userId === person.id);
     const entry = { name: person.name, color: member?.color ?? "#6366f1" };
     remoteSelectionsByNodeId.set(nodeId, [...(remoteSelectionsByNodeId.get(nodeId) ?? []), entry]);
   });
@@ -1853,7 +1878,7 @@ export function CanvasScreen({
           돌아가기
         </button>
         <div className="w-px h-4 bg-[#E0DFE0]" />
-        <span className="text-xs text-[#717182]">{workspace.name}</span>
+        <span className="text-xs text-[#717182]">{liveWorkspace.name}</span>
         <ChevronRight className="w-3 h-3 text-[#C8C7D0]" />
         <span className="text-xs font-semibold text-[#0D0D14]">{liveMapName}</span>
         {canEditMap && (
@@ -1875,7 +1900,7 @@ export function CanvasScreen({
         <div className="flex items-center" style={{ gap: "-6px" }} title="지금 접속 중인 사용자">
           <div className="flex -space-x-1.5">
             {presence.slice(0, 4).map((person, i) => {
-              const member = workspace.members.find(m => m.userId === person.id);
+              const member = liveWorkspace.members.find(m => m.userId === person.id);
               const initials = member?.initials ?? person.name.split(" ").map(part => part[0]).join("");
               return (
                 <div key={person.id} title={person.name}
@@ -2302,7 +2327,7 @@ export function CanvasScreen({
         </div>
       )}
 
-      {showShare && <ShareModal workspace={workspace} onClose={() => setShowShare(false)} onInvite={onInvite} />}
+      {showShare && <ShareModal workspace={liveWorkspace} onClose={() => setShowShare(false)} onInvite={onInvite} />}
       {renamingMap && (
         <RenameModal
           title="마인드맵 이름 수정"
