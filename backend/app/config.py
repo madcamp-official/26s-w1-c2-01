@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.5-flash"
     # gemini_model이 할당량 초과 등으로 실패하면 순서대로 시도할 모델들 (콤마 구분, 모델마다 무료 할당량이
     # 별도로 관리되므로 하나가 소진돼도 다른 모델로 자동 전환된다)
-    gemini_fallback_models: str = "gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite"
+    # 모델 수가 많을수록 전부 실패했을 때 순차 시도로 누적되는 지연도 늘어나므로 1개로 제한
+    gemini_fallback_models: str = "gemini-3.1-flash-lite"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

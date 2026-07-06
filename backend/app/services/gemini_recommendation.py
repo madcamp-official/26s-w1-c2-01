@@ -56,6 +56,14 @@ def generate_keyword_suggestions(
         response_mime_type="application/json",
         response_schema=_SuggestionList,
         temperature=0.9,
+        # SDK 기본값은 429/5xx에 대해 모델 1개당 최대 5회, 최대 60초 backoff로 자동 재시도한다.
+        # 우리는 이미 모델을 여러 개 순회하며 폴백하므로, 이 내부 재시도까지 겹치면 할당량
+        # 초과 모델 하나당 수십 초씩 허비하다가 전체 응답이 몇 분씩 느려진다. 재시도는 끄고
+        # 모델 1개당 한 번만 빠르게 시도한 뒤 바로 다음 모델로 넘어가게 한다.
+        http_options=types.HttpOptions(
+            timeout=8_000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
     )
 
     # 무료 티어는 모델마다 할당량이 따로 관리되므로, 지금 모델이 할당량 초과 등으로
