@@ -117,7 +117,8 @@ async def _fallback_recommendations(block_id: int, content: str, exclude: list[s
         setting = await get_or_create_setting(db, mindmap.workspace_id)
         search_weight = setting.search_trend_weight
 
-    search_terms = await fetch_related_search_terms(content, limit=5)
+    # 순위 재조정(원본 포함 후보 감점)이 걸러낼 걸 감안해 후보 풀을 넉넉히 가져온다
+    search_terms = await fetch_related_search_terms(content, limit=10)
     exclude_keys = {normalize_dedup_key(item) for item in exclude}
     return merge_recommendations(
         [],
@@ -125,4 +126,5 @@ async def _fallback_recommendations(block_id: int, content: str, exclude: list[s
         semantic_weight=0.0,
         search_weight=search_weight,
         exclude=exclude_keys,
+        source_content=content,
     )

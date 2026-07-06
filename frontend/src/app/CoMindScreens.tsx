@@ -639,7 +639,15 @@ export function WorkspaceScreen({
                 <span className="text-xs font-semibold text-indigo-600">{ws.members.length}명</span>
               </div>
               <div className="space-y-2">
-                {ws.members.map(m => (
+                {[...ws.members].sort((a, b) => {
+                  // 본인이 항상 맨 위, 그다음 소유자 > 편집자 > 뷰어 순, 같은 역할끼리는 가나다순
+                  const aIsSelf = a.userId === user.id;
+                  const bIsSelf = b.userId === user.id;
+                  if (aIsSelf !== bIsSelf) return aIsSelf ? -1 : 1;
+                  const roleOrder: Record<Role, number> = { owner: 0, editor: 1, viewer: 2 };
+                  if (roleOrder[a.role] !== roleOrder[b.role]) return roleOrder[a.role] - roleOrder[b.role];
+                  return a.name.localeCompare(b.name, "ko");
+                }).map(m => (
                   <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F8F7F4] transition-colors">
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
                       style={{ backgroundColor: m.color }}>{m.initials}</div>

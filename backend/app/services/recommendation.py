@@ -32,6 +32,18 @@ async def fetch_related_search_terms(query: str, limit: int = 5) -> list[str]:
     return terms[:limit]
 
 
+def _novelty_factor(candidate_key: str, source_key: str) -> float:
+    """DuckDuckGo 자동완성은 입력 문구 뒤에 몇 글자만 붙인 결과("시작 시점 영어로")도
+    그대로 내려주는 경우가 많아, 원본을 거의 그대로 포함한 후보는 사실상 새로운 아이디어가
+    아니라 검색창 자동완성 찌꺼기에 가깝다. 완전히 걸러내기보다는(짧은 문구는 원본을 포함하는
+    게 자연스러울 수도 있으므로) 가중치를 낮춰 순위 하위로 밀어내는 정도로만 반영한다.
+    """
+    if not source_key or source_key not in candidate_key:
+        return 1.0
+    overlap_ratio = len(source_key) / len(candidate_key)
+    return max(0.15, 1.0 - overlap_ratio)
+
+
 def merge_recommendations(
     semantic_candidates: list[dict],
     search_terms: list[str],
@@ -40,13 +52,17 @@ def merge_recommendations(
     search_weight: float,
     limit: int = 6,
     exclude: set[str] | None = None,
+    source_content: str = "",
 ) -> list[dict]:
     """사전적 유사성 후보 + 관련검색어 후보를 가중치로 합산해서 하나의 순위 목록으로 만듦
 
     `exclude`는 원본 블록 내용이나 이미 존재하는 하위 노드처럼, 그대로 다시 추천되면
     의미 없는 레이블들을 걸러내기 위한 정규화된(`normalize_dedup_key`) 키 집합이다.
+    `source_content`가 주어지면, 원본을 거의 그대로 포함하는 관련검색어 후보(자동완성
+    찌꺼기)의 가중치를 낮춰 진짜 새로운 후보가 위로 오도록 한다.
     """
     excluded_keys = exclude or set()
+    source_key = normalize_dedup_key(source_content) if source_content else ""
     scores: dict[str, float] = {}
     display: dict[str, str] = {}
     source: dict[str, str] = {}
@@ -65,7 +81,7 @@ def merge_recommendations(
         term = term.strip()
         if not key or key in excluded_keys:
             continue
-        rank_score = max(0.0, 1 - rank / total_terms)
+        rank_score = max(0.0, 1 - rank / total_terms) * _novelty_factor(key, source_key)
         scores[key] = scores.get(key, 0.0) + rank_score * search_weight
         display.setdefault(key, term)
         source.setdefault(key, "search")

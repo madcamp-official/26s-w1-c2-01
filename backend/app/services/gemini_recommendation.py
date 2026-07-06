@@ -51,22 +51,29 @@ def generate_keyword_suggestions(
     from google.genai import types
 
     prompt = _build_prompt(content, color_group[:8], exclude[:30], limit)
-    try:
-        response = _get_client().models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=_SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=_SuggestionList,
-                temperature=0.9,
-            ),
-        )
-        parsed = _SuggestionList.model_validate_json(response.text)
-    except Exception:
-        # 원인(할당량 초과 429, 일시 장애 503, 응답 스키마 불일치 등)을 알 수 없으면
-        # 폴백만 계속 타는 상황을 디버깅할 방법이 없으므로 반드시 로그를 남긴다
-        logger.warning("Gemini 추천 생성 실패, 관련검색어 폴백으로 전환", exc_info=True)
+    config = types.GenerateContentConfig(
+        system_instruction=_SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",
+        response_schema=_SuggestionList,
+        temperature=0.9,
+    )
+
+    # 무료 티어는 모델마다 할당량이 따로 관리되므로, 지금 모델이 할당량 초과 등으로
+    # 실패하면 다음 모델로 자동 전환해본다. 모든 모델을 다 소진했을 때만 검색어 폴백으로 넘긴다.
+    parsed = None
+    for model in settings.gemini_models_in_order:
+        try:
+            response = _get_client().models.generate_content(model=model, contents=prompt, config=config)
+            parsed = _SuggestionList.model_validate_json(response.text)
+            break
+        except Exception:
+            # 원인(할당량 초과 429, 일시 장애 503, 응답 스키마 불일치 등)을 알 수 없으면
+            # 폴백만 계속 타는 상황을 디버깅할 방법이 없으므로 반드시 로그를 남긴다
+            logger.warning("Gemini 모델 '%s' 호출 실패, 다음 모델로 재시도", model, exc_info=True)
+            continue
+
+    if parsed is None:
+        logger.warning("설정된 Gemini 모델을 모두 시도했지만 전부 실패, 관련검색어 폴백으로 전환")
         return []
 
     excluded_keys = {normalize_dedup_key(item) for item in exclude} | {normalize_dedup_key(content)}
