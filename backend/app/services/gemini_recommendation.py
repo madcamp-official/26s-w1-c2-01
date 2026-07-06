@@ -1,4 +1,5 @@
 import logging
+import time
 
 from pydantic import BaseModel
 
@@ -56,32 +57,47 @@ def generate_keyword_suggestions(
         response_mime_type="application/json",
         response_schema=_SuggestionList,
         temperature=0.9,
+        # 1~4단어 명사구 몇 개만 필요한 작업이라 출력 토큰 상한을 낮게 잡아, 응답이 길어질 여지를 줄인다
+        max_output_tokens=256,
         # SDK 기본값은 429/5xx에 대해 모델 1개당 최대 5회, 최대 60초 backoff로 자동 재시도한다.
         # 우리는 이미 모델을 여러 개 순회하며 폴백하므로, 이 내부 재시도까지 겹치면 할당량
         # 초과 모델 하나당 수십 초씩 허비하다가 전체 응답이 몇 분씩 느려진다. 재시도는 끄고
         # 모델 1개당 한 번만 빠르게 시도한 뒤 바로 다음 모델로 넘어가게 한다.
+        # timeout은 Gemini API가 허용하는 최소값(10s)보다 반드시 커야 한다 — 8s로 뒀더니
+        # 매 요청이 서버에 닿기도 전에 400 INVALID_ARGUMENT로 즉시 거절되어 항상 폴백만 탔었다.
         http_options=types.HttpOptions(
-            timeout=8_000,
+            timeout=12_000,
             retry_options=types.HttpRetryOptions(attempts=1),
         ),
     )
 
     # 무료 티어는 모델마다 할당량이 따로 관리되므로, 지금 모델이 할당량 초과 등으로
     # 실패하면 다음 모델로 자동 전환해본다. 모든 모델을 다 소진했을 때만 검색어 폴백으로 넘긴다.
+    models_in_order = settings.gemini_models_in_order
+    logger.info("[Gemini] content=%r 추천 생성 시작 (시도 순서: %s)", content, models_in_order)
+
     parsed = None
-    for model in settings.gemini_models_in_order:
+    for model in models_in_order:
+        started_at = time.monotonic()
         try:
             response = _get_client().models.generate_content(model=model, contents=prompt, config=config)
             parsed = _SuggestionList.model_validate_json(response.text)
+            logger.info(
+                "[Gemini] 모델 '%s' 성공 (%.2fs), 제안 %d개",
+                model, time.monotonic() - started_at, len(parsed.suggestions),
+            )
             break
         except Exception:
             # 원인(할당량 초과 429, 일시 장애 503, 응답 스키마 불일치 등)을 알 수 없으면
             # 폴백만 계속 타는 상황을 디버깅할 방법이 없으므로 반드시 로그를 남긴다
-            logger.warning("Gemini 모델 '%s' 호출 실패, 다음 모델로 재시도", model, exc_info=True)
+            logger.warning(
+                "[Gemini] 모델 '%s' 호출 실패 (%.2fs), 다음 모델로 재시도",
+                model, time.monotonic() - started_at, exc_info=True,
+            )
             continue
 
     if parsed is None:
-        logger.warning("설정된 Gemini 모델을 모두 시도했지만 전부 실패, 관련검색어 폴백으로 전환")
+        logger.warning("[Gemini] 설정된 모델(%s)을 모두 시도했지만 전부 실패, 관련검색어 폴백으로 전환", models_in_order)
         return []
 
     excluded_keys = {normalize_dedup_key(item) for item in exclude} | {normalize_dedup_key(content)}

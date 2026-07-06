@@ -14,26 +14,20 @@ async def list_blocks_by_map(db: AsyncSession, map_id: int) -> list[Block]:
     return list(result.scalars().all())
 
 
-async def list_child_contents(db: AsyncSession, parent_block_id: int) -> list[str]:
-    """이미 존재하는 하위 노드 내용 목록 (추천에서 중복 제외용)"""
-    stmt = select(Block.content).where(Block.parent_block_id == parent_block_id)
+async def list_other_contents_in_map(db: AsyncSession, map_id: int, exclude_block_id: int) -> list[str]:
+    """이 맵에 있는 자기 자신 외 모든 노드의 내용 (추천에서 맵 전체 중복 제외용).
+
+    조상/직계 하위뿐 아니라 다른 가지에 있는 노드와도 같은 단어가 다시 추천되면 안 되므로,
+    특정 부모 밑으로 범위를 좁히지 않고 맵 전체를 대상으로 조회한다. 최근 생성분을 앞쪽에 둬서,
+    프롬프트에 넣을 때 일부만 잘라써도(exclude[:30]) 가장 관련성 높은 항목이 먼저 오게 한다.
+    """
+    stmt = (
+        select(Block.content)
+        .where(Block.map_id == map_id, Block.id != exclude_block_id)
+        .order_by(Block.created_at.desc())
+    )
     result = await db.execute(stmt)
     return list(result.scalars().all())
-
-
-async def list_ancestor_contents(db: AsyncSession, block: Block) -> list[str]:
-    """루트까지 올라가며 조상 노드들의 내용을 모음 (추천에서 이미 나온 단어 제외용)"""
-    contents: list[str] = []
-    visited: set[int] = {block.id}
-    current = block
-    while current.parent_block_id is not None:
-        parent = await get_block(db, current.parent_block_id)
-        if parent is None or parent.id in visited:
-            break    # 예상 못한 순환이 있어도 무한루프 방지
-        contents.append(parent.content)
-        visited.add(parent.id)
-        current = parent
-    return contents
 
 
 async def list_same_color_siblings(

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +28,8 @@ from app.services.recommendation_cache import (
 )
 from app.worker import celery_app
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["recommendations"])
 
 
@@ -40,7 +44,10 @@ async def get_recommendations(
         # 여러 번 폴링하므로, 이미 같은 블록에 대한 생성이 진행 중이면 또 큐에 넣지 않는다
         # (그렇지 않으면 폴링할 때마다 Gemini 호출이 중복으로 쌓여 rate limit에 쉽게 걸린다)
         if await try_start_generation(block.id):
+            logger.info("[추천] block=%s 노드 선택 → 생성 작업 큐에 등록", block.id)
             celery_app.send_task("app.tasks.generate_recommendations", args=[block.id])
+        else:
+            logger.info("[추천] block=%s 노드 선택 → 이미 생성 진행 중이라 큐에 등록하지 않음 (폴링 대기)", block.id)
         # 완료되면 WebSocket recommendation:ready 이벤트로 알아서 push
         return []
     return cached[:limit]

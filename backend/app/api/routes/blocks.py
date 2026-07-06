@@ -93,6 +93,14 @@ async def update_content(
 ):
     updated = await update_block_content(db, block, content=body.content, color=body.color)
     await manager.broadcast(updated.map_id, block_event("block:updated", updated))
+    if body.content is not None:
+        # 이름(content)이 바뀌면 이 블록에 캐시된 추천은 예전 내용 기준으로 생성된 것이라
+        # 무효화한다. 그러지 않으면 "새 아이디어" 같은 임시 이름일 때 만들어진 추천 목록이
+        # 남아있다가, 사용자가 그 추천 단어 중 하나로 직접 이름을 바꾸는 순간 "자기 자신과
+        # 같은 단어가 추천됨"으로 보인다. 부모 입장에서도 하위 블록 내용이 바뀌었으니 함께 무효화.
+        await invalidate_recommendations(updated.id)
+        if updated.parent_block_id is not None:
+            await invalidate_recommendations(updated.parent_block_id)
     return updated
 
 

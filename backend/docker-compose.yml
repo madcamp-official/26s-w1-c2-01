@@ -4,6 +4,12 @@ services:
     image: comind-backend:latest
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
+    # GEMINI_MODEL/GEMINI_FALLBACK_MODELS는 배포 서버의 .env(git에 없어 수동 관리, git pull로
+    # 갱신되지 않음)보다 여기(코드 저장소, 배포 시 항상 최신)를 우선시켜 배포할 때마다 확실히 반영되게 함.
+    # environment는 env_file보다 우선순위가 높다.
+    environment:
+      GEMINI_MODEL: gemini-3.1-flash-lite
+      GEMINI_FALLBACK_MODELS: gemini-3.5-flash
     volumes:
       - ./app:/app/app
       - ./alembic:/app/alembic
@@ -17,8 +23,15 @@ services:
 
   worker:
     image: comind-backend:latest
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    # 추천 작업은 대부분 Gemini API 응답을 기다리는 I/O 대기라 CPU 병렬성이 필요 없다.
+    # 기본 prefork 풀은 concurrency가 CPU 코어 수로 제한돼(코어가 적은 인스턴스에서는 1~2),
+    # 블록이 여러 개 연달아 생기면 추천이 순서대로 밀린다. threads 풀 + 넉넉한 concurrency로
+    # CPU 코어 수와 무관하게 여러 추천을 동시에 처리한다.
+    command: celery -A app.worker.celery_app worker --loglevel=info --pool=threads --concurrency=16
     env_file: .env
+    environment:
+      GEMINI_MODEL: gemini-3.1-flash-lite
+      GEMINI_FALLBACK_MODELS: gemini-3.5-flash
     volumes:
       - ./app:/app/app
     depends_on:

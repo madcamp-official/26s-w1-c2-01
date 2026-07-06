@@ -1,4 +1,5 @@
 import json
+import unicodedata
 
 import httpx
 
@@ -8,8 +9,12 @@ def normalize_dedup_key(text: str) -> str:
 
     앞뒤 공백과 대소문자뿐 아니라 단어 사이 공백 유무까지 같은 표현으로 취급해야,
     "시작 시점"과 "시작시점"처럼 띄어쓰기만 다른 표현이 서로 다른 추천으로 새어나가지 않는다.
+    NFKC 정규화까지 거치는 이유: 한글 입력기(IME)나 일부 클라이언트는 완성형이 아니라
+    자모가 분리된 조합형 유니코드로 문자열을 넘길 수 있는데, 화면에는 완전히 같은 글자로
+    보여도 원문자열을 그대로 비교하면 다른 문자열로 취급돼 자기 자신이 다시 추천되는 걸
+    놓칠 수 있다. NFKC는 이런 완성형/조합형 차이와 전각/반각 차이를 하나로 통일해준다.
     """
-    return "".join(text.split()).lower()
+    return unicodedata.normalize("NFKC", "".join(text.split()).lower())
 
 
 async def fetch_related_search_terms(query: str, limit: int = 5) -> list[str]:

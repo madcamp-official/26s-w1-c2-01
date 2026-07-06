@@ -23,11 +23,11 @@ class Settings(BaseSettings):
     # 추천 단어 생성용 Gemini API 키 (없으면 사전적 유사도 + 관련검색어 방식으로 폴백)
     gemini_api_key: str = ""
     # 무료 티어는 모델별로 할당량이 다르고 자주 바뀌므로, 코드 수정 없이 .env에서만 바꿔가며 쓸 수 있게 함
-    gemini_model: str = "gemini-3.5-flash"
-    # gemini_model이 할당량 초과 등으로 실패하면 순서대로 시도할 모델들 (콤마 구분, 모델마다 무료 할당량이
-    # 별도로 관리되므로 하나가 소진돼도 다른 모델로 자동 전환된다)
-    # 모델 수가 많을수록 전부 실패했을 때 순차 시도로 누적되는 지연도 늘어나므로 1개로 제한
-    gemini_fallback_models: str = "gemini-3.1-flash-lite"
+    gemini_model: str = "gemini-3.1-flash-lite"
+    # gemini_model이 할당량 초과 등으로 실패하면 순서대로 시도할 모델들 (콤마 구분). SDK 자체 재시도를
+    # 끄고 모델당 timeout도 짧게 잡아둔 상태라, 폴백 1개 추가는 최악의 경우에도 지연이 크게 늘지
+    # 않으면서 할당량 소진 시 검색어 폴백 대신 실제 Gemini 품질을 한 번 더 시도할 기회를 준다
+    gemini_fallback_models: str = "gemini-3.5-flash"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
