@@ -4,7 +4,7 @@ import {
   Plus, Share2, Check, X, ArrowLeft, ZoomIn, ZoomOut,
   Trash2, Brain, LogOut, UserPlus, UserX, Bell, ChevronRight,
   Maximize2, Pencil, GitBranch, LocateFixed,
-  ListTree,
+  ListTree, Menu, Users,
   MessageCircle, SlidersHorizontal, CheckCircle2,
 } from "lucide-react";
 
@@ -426,6 +426,8 @@ export function WorkspaceScreen({
   const [deletingMap, setDeletingMap] = useState<MapData | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
 
   useEffect(() => {
     setWorkspaces(initialWorkspaces);
@@ -455,15 +457,27 @@ export function WorkspaceScreen({
   return (
     <div className="min-h-screen bg-[#F8F7F4] flex flex-col">
       {/* Top nav */}
-      <header className="h-14 bg-white border-b border-[#E8E7EA] flex items-center px-5 gap-3 flex-shrink-0">
+      <header className="h-14 bg-white border-b border-[#E8E7EA] flex items-center px-3 sm:px-5 gap-2 sm:gap-3 flex-shrink-0">
+        <button onClick={() => setShowSidebar(true)} aria-label="워크스페이스 목록 열기"
+          className="lg:hidden -ml-1 w-8 h-8 rounded-lg hover:bg-[#F0EFF5] flex items-center justify-center transition-colors flex-shrink-0">
+          <Menu className="w-4.5 h-4.5 text-[#717182]" />
+        </button>
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center">
             <Brain className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="font-semibold text-[#0D0D14] tracking-tight">CoMind</span>
+          <span className="hidden sm:block font-semibold text-[#0D0D14] tracking-tight">CoMind</span>
         </div>
 
         <div className="flex-1" />
+
+        {/* Members drawer toggle (mobile/tablet only) */}
+        {ws && (
+          <button onClick={() => setShowMembers(true)} aria-label="멤버 목록 열기"
+            className="lg:hidden w-8 h-8 rounded-full hover:bg-[#F0EFF5] flex items-center justify-center transition-colors">
+            <Users className="w-4 h-4 text-[#717182]" />
+          </button>
+        )}
 
         {/* Invitation bell */}
         <button onClick={onViewInvitation}
@@ -510,13 +524,27 @@ export function WorkspaceScreen({
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile/tablet backdrop for the workspace-list drawer */}
+        {showSidebar && (
+          <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setShowSidebar(false)} />
+        )}
         {/* Sidebar */}
-        <aside className="w-56 bg-white border-r border-[#E8E7EA] flex flex-col py-5 flex-shrink-0">
-          <p className="text-[10px] font-bold text-[#ABABAB] uppercase tracking-widest px-5 mb-2">워크스페이스</p>
+        <aside className={[
+          "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-[#E8E7EA] flex flex-col py-5 transition-transform duration-200",
+          "lg:static lg:z-auto lg:w-56 lg:translate-x-0 lg:transition-none",
+          showSidebar ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}>
+          <div className="flex items-center justify-between px-5 mb-2">
+            <p className="text-[10px] font-bold text-[#ABABAB] uppercase tracking-widest">워크스페이스</p>
+            <button onClick={() => setShowSidebar(false)} aria-label="닫기"
+              className="lg:hidden -mr-1.5 w-7 h-7 rounded-lg hover:bg-[#F0EFF5] flex items-center justify-center text-[#ABABAB]">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
           <div className="flex-1 overflow-y-auto space-y-0.5 px-3">
             {workspaces.map(w => (
-              <button key={w.id} onClick={() => setActiveId(w.id)}
+              <button key={w.id} onClick={() => { setActiveId(w.id); setShowSidebar(false); }}
                 className={[
                   "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors text-sm",
                   activeId === w.id
@@ -545,13 +573,13 @@ export function WorkspaceScreen({
         {/* Main */}
         {ws ? (
           <>
-            <main className="flex-1 overflow-y-auto p-8">
+            <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
               <div className="max-w-3xl mx-auto">
                 {/* Header */}
-                <div className="flex items-start justify-between mb-8">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6 sm:mb-8">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1">
-                      <h1 className="text-2xl font-semibold text-[#0D0D14] tracking-tight">{ws.name}</h1>
+                      <h1 className="text-xl sm:text-2xl font-semibold text-[#0D0D14] tracking-tight truncate">{ws.name}</h1>
                       {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
                         <button onClick={() => setRenamingWorkspace(true)} title="워크스페이스 이름 수정"
                           className="p-1.5 rounded-lg text-[#ABABAB] hover:bg-[#F0EFF5] hover:text-[#0D0D14] transition-colors">
@@ -577,7 +605,7 @@ export function WorkspaceScreen({
                   </div>
                   {(ws.currentRole === "owner" || ws.currentRole === "editor") && (
                     <button onClick={() => setShowShare(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-indigo-600/20">
+                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-indigo-600/20 flex-shrink-0 self-start">
                       <Share2 className="w-4 h-4" />
                       워크스페이스 공유
                     </button>
@@ -633,10 +661,24 @@ export function WorkspaceScreen({
               </div>
             </main>
 
-            <aside className="w-72 bg-white border-l border-[#E8E7EA] flex-shrink-0 p-5 overflow-y-auto">
+            {/* Mobile/tablet backdrop for the members drawer */}
+            {showMembers && (
+              <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setShowMembers(false)} />
+            )}
+            <aside className={[
+              "fixed inset-y-0 right-0 z-50 w-72 bg-white border-l border-[#E8E7EA] p-5 overflow-y-auto transition-transform duration-200",
+              "lg:static lg:z-auto lg:flex-shrink-0 lg:translate-x-0 lg:transition-none",
+              showMembers ? "translate-x-0" : "translate-x-full",
+            ].join(" ")}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-[11px] font-bold text-[#ABABAB] uppercase tracking-widest">멤버</h2>
-                <span className="text-xs font-semibold text-indigo-600">{ws.members.length}명</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-indigo-600">{ws.members.length}명</span>
+                  <button onClick={() => setShowMembers(false)} aria-label="닫기"
+                    className="lg:hidden -mr-1.5 w-7 h-7 rounded-lg hover:bg-[#F0EFF5] flex items-center justify-center text-[#ABABAB]">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 {[...ws.members].sort((a, b) => {
@@ -2009,18 +2051,18 @@ export function CanvasScreen({
   return (
     <div className="size-full flex flex-col overflow-hidden bg-[#F8F7F4]">
       {/* ── Top bar ── */}
-      <div className="h-12 flex items-center px-4 gap-3 flex-shrink-0 border-b border-[#E8E7EA] bg-white z-10">
+      <div className="h-12 flex items-center px-2 sm:px-4 gap-1.5 sm:gap-3 flex-shrink-0 border-b border-[#E8E7EA] bg-white z-10 overflow-hidden">
         <button onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-medium text-[#717182] hover:text-[#0D0D14] transition-colors mr-1">
+          className="flex items-center gap-1.5 text-xs font-medium text-[#717182] hover:text-[#0D0D14] transition-colors mr-0.5 sm:mr-1 flex-shrink-0">
           <ArrowLeft className="w-3.5 h-3.5" />
-          돌아가기
+          <span className="hidden sm:inline">돌아가기</span>
         </button>
-        <div className="w-px h-4 bg-[#E0DFE0]" />
-        <span className="text-xs text-[#717182]">{liveWorkspace.name}</span>
-        <ChevronRight className="w-3 h-3 text-[#C8C7D0]" />
-        <span className="text-xs font-semibold text-[#0D0D14]">{liveMapName}</span>
+        <div className="hidden sm:block w-px h-4 bg-[#E0DFE0] flex-shrink-0" />
+        <span className="hidden sm:inline text-xs text-[#717182] flex-shrink-0 max-w-[100px] truncate">{liveWorkspace.name}</span>
+        <ChevronRight className="hidden sm:block w-3 h-3 text-[#C8C7D0] flex-shrink-0" />
+        <span className="text-xs font-semibold text-[#0D0D14] truncate min-w-0">{liveMapName}</span>
         {canEditMap && (
-          <div className="flex items-center gap-0.5 -ml-1">
+          <div className="hidden sm:flex items-center gap-0.5 -ml-1 flex-shrink-0">
             <button onClick={() => setRenamingMap(true)} title="마인드맵 이름 수정"
               className="p-1 rounded-lg text-[#ABABAB] hover:bg-[#F0EFF5] hover:text-[#0D0D14] transition-colors">
               <Pencil className="w-3 h-3" />
@@ -2035,7 +2077,7 @@ export function CanvasScreen({
         <div className="flex-1" />
 
         {/* 지금 이 마인드맵에 실시간으로 접속해 있는 사용자 */}
-        <div className="flex items-center" style={{ gap: "-6px" }} title="지금 접속 중인 사용자">
+        <div className="hidden sm:flex items-center flex-shrink-0" style={{ gap: "-6px" }} title="지금 접속 중인 사용자">
           <div className="flex -space-x-1.5">
             {presence.slice(0, 4).map((person, i) => {
               const member = liveWorkspace.members.find(m => m.userId === person.id);
@@ -2060,14 +2102,14 @@ export function CanvasScreen({
 
         {canEditMap && (
           <button onClick={() => setShowShare(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0"
             style={{ background: "#4F46E5", color: "white" }}>
             <Share2 className="w-3 h-3" />
-            공유
+            <span className="hidden sm:inline">공유</span>
           </button>
         )}
 
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <button onClick={() => setShowProfileMenu(open => !open)}
             className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
             {userInitials}
@@ -2305,42 +2347,42 @@ export function CanvasScreen({
           {/* Bottom context bar when node selected */}
           {selectedNode && !editingId && (
             <div onPointerDown={e => e.stopPropagation()}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white border border-[#E0DFE0] shadow-xl">
-              <span className="text-xs max-w-[100px] truncate text-[#717182]">
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex max-w-[calc(100vw-2rem)] items-center gap-2 sm:gap-2.5 overflow-x-auto px-3 sm:px-3.5 py-2 rounded-2xl bg-white border border-[#E0DFE0] shadow-xl">
+              <span className="text-xs max-w-[100px] truncate text-[#717182] flex-shrink-0">
                 {selectedNode.text}
               </span>
-              <div className="w-px h-4 bg-[#E0DFE0]" />
+              <div className="w-px h-4 bg-[#E0DFE0] flex-shrink-0" />
               {/* Color swatches */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 {NODE_COLORS.map(c => (
                   <button key={c} onClick={() => changeColor(selectedId!, c)}
-                    className="w-4 h-4 rounded-full border-2 transition-transform hover:scale-125"
+                    className="w-4 h-4 rounded-full border-2 transition-transform hover:scale-125 flex-shrink-0"
                     style={{ backgroundColor: c, borderColor: selectedNode.color === c ? "#0D0D14" : "transparent" }} />
                 ))}
               </div>
-              <div className="w-px h-4 bg-[#E0DFE0]" />
+              <div className="w-px h-4 bg-[#E0DFE0] flex-shrink-0" />
               <button onClick={() => addChild(selectedId!)} disabled={!canEditMap}
-                className="flex items-center gap-1 text-xs font-semibold transition-colors disabled:opacity-35"
+                className="flex items-center gap-1 text-xs font-semibold transition-colors disabled:opacity-35 flex-shrink-0 whitespace-nowrap"
                 style={{ color: "#4F46E5" }}>
                 <Plus className="w-3 h-3" />하위 노드
               </button>
               <button onClick={() => autoArrangeChildren(selectedId!)}
                 disabled={!nodes.some(node => node.parentId === selectedId)}
-                className="flex items-center gap-1 text-xs transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 text-xs transition-colors disabled:opacity-35 disabled:cursor-not-allowed flex-shrink-0 whitespace-nowrap"
                 style={{ color: "#717182" }}
                 title="하위 노드 자동 정렬">
                 <ListTree className="w-3 h-3" />자동 정렬
               </button>
               <button onClick={() => startEdit(selectedId!)} disabled={!canEditMap}
-                className="flex items-center gap-1 text-xs transition-colors disabled:opacity-35"
+                className="flex items-center gap-1 text-xs transition-colors disabled:opacity-35 flex-shrink-0"
                 style={{ color: "#717182" }}>
                 <Pencil className="w-3 h-3" />
               </button>
               {selectedNode?.parentId !== null && canEditMap && (
                 <>
-                  <div className="w-px h-4 bg-[#E0DFE0]" />
+                  <div className="w-px h-4 bg-[#E0DFE0] flex-shrink-0" />
                   <button onClick={() => requestDelete(selectedId!)}
-                    className="text-xs transition-colors"
+                    className="text-xs transition-colors flex-shrink-0"
                     style={{ color: "#F87171" }}>
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -2352,8 +2394,12 @@ export function CanvasScreen({
 
         {/* ── Right properties panel ── */}
         {selectedNode && !editingId && (
-          <div className="relative w-64 flex flex-col min-h-0 py-5 px-4 flex-shrink-0 border-l border-[#E8E7EA] bg-white">
-            <div className="absolute -left-11 top-5 flex flex-col overflow-hidden rounded-l-xl border border-r-0 border-[#E8E7EA] bg-white shadow-sm">
+          <>
+            {/* 모바일/태블릿에서는 캔버스를 덮는 드로어라, 배경을 탭하면 선택을 풀어 닫히게 한다 */}
+            <div className="fixed inset-0 z-20 bg-black/20 md:hidden" onClick={() => setSelectedId(null)} />
+            <div className="fixed inset-y-0 right-0 z-30 w-[82vw] max-w-[272px] flex flex-col min-h-0 py-5 px-4 border-l border-[#E8E7EA] bg-white shadow-2xl md:relative md:z-auto md:w-64 md:max-w-none md:flex-shrink-0 md:shadow-none">
+            {/* 화면이 좁으면 캔버스와 겹치는 좌측 플로팅 탭 대신, 패널 안쪽 상단에 가로 탭으로 전환 */}
+            <div className="hidden md:flex absolute -left-11 top-5 flex-col overflow-hidden rounded-l-xl border border-r-0 border-[#E8E7EA] bg-white shadow-sm">
               <button onClick={() => setPanelMode("controls")} title="노드 조작"
                 className={`flex h-10 w-10 items-center justify-center transition-colors ${panelMode === "controls" ? "bg-indigo-50 text-indigo-600" : "text-[#ABABAB] hover:bg-[#F8F7F4]"}`}>
                 <SlidersHorizontal className="h-4 w-4" />
@@ -2367,8 +2413,24 @@ export function CanvasScreen({
               </button>
             </div>
 
+            <div className="flex md:hidden items-center gap-1 rounded-xl border border-[#E8E7EA] bg-[#F8F7F4] p-1 mb-4">
+              <button onClick={() => setPanelMode("controls")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-colors ${panelMode === "controls" ? "bg-white text-indigo-600 shadow-sm" : "text-[#ABABAB]"}`}>
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                노드
+              </button>
+              <button onClick={() => setPanelMode("comments")}
+                className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-colors ${panelMode === "comments" ? "bg-white text-indigo-600 shadow-sm" : "text-[#ABABAB]"}`}>
+                <MessageCircle className="h-3.5 w-3.5" />
+                댓글
+                {comments.filter(comment => comment.nodeId === selectedId && !comment.solved).length > 0 && (
+                  <span className="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                )}
+              </button>
+            </div>
+
             {panelMode === "controls" ? <>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-4 text-[#ABABAB]">노드</p>
+            <p className="hidden md:block text-[10px] font-bold uppercase tracking-widest mb-4 text-[#ABABAB]">노드</p>
 
             <div className="space-y-5">
               <div>
@@ -2436,7 +2498,8 @@ export function CanvasScreen({
                 setComments(prev => prev.map(comment => comment.id === commentId ? { ...comment, solved: true } : comment));
               }}
             />}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
