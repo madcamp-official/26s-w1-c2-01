@@ -12,8 +12,8 @@
 
 | 이름 | GitHub | 역할 |
 |---|---|---|
-|양우현|[@hyun020215](https://github.com/hyun020215)|  |
-|김경원|[@kkw610](https://github.com/kkw610)|  |
+|양우현|[@hyun020215](https://github.com/hyun020215)| 디자인, Frontend 전반, QA, CI/CD |
+|김경원|[@kkw610](https://github.com/kkw610)| API 문서화, 추천 알고리즘 설계, Backend 전반, QA |
 
 ---
 
