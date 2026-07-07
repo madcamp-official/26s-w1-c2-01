@@ -1,4 +1,4 @@
-import { LoginScreen } from "../CoMindScreens";
+import { LoginScreen } from "../components/screens/LoginScreen"
 
 export interface LoginPageProps {
   onLogin: (name: string, email: string, password: string, isSignUp: boolean) => Promise<void>;
