@@ -1,4 +1,5 @@
-import { CanvasScreen, MapData, WorkspaceData } from "../CoMindScreens";
+import { MapData, WorkspaceData } from "../data/type";
+import { CanvasScreen } from "../components/screens/CanvasScreen";
 
 interface MindMapPageProps {
   workspace: WorkspaceData;

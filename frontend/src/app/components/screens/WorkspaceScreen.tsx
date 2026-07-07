@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Role, MemberData, WorkspaceData, MapData } from "../../data/type";
-import { applyWorkspaceRealtimeEvent } from "../../data/const";
+import { applyWorkspaceRealtimeEvent } from "../../utils/realtime";
 import { api } from "../../../api/client";
 
 import {

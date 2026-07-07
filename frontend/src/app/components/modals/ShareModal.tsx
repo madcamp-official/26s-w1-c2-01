@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { WorkspaceData } from "../../types/type";
+import { WorkspaceData } from "../../data/type";
 import { api } from "../../../api/client";
 import { ApiUserSearchResult } from "../../../api/client";
 import { X, UserPlus } from "lucide-react";

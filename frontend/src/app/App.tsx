@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 
 import { api, ApiInvitation, ApiUser } from "../api/client";
-import { MapData, MemberData, WorkspaceData } from "./CoMindScreens";
+import { MapData, MemberData, WorkspaceData } from "./data/type";
 import { InvitationPage } from "./pages/InvitationPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MindMapPage } from "./pages/MindMapPage";
