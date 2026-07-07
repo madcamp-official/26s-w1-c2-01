@@ -58,6 +58,15 @@ export const api = {
   checkEmailAvailability: (email: string) =>
     request<{ available: boolean }>(`/auth/email-availability?email=${encodeURIComponent(email)}`),
   me: () => request<ApiUser>("/users/me"),
+  updateProfile: (payload: { name?: string; currentPassword?: string; newPassword?: string }) =>
+    request<ApiUser>("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: payload.name,
+        current_password: payload.currentPassword,
+        new_password: payload.newPassword,
+      }),
+    }),
   deleteAccount: () => request<{ message: string }>("/users/me", { method: "DELETE" }),
   logout() {
     localStorage.removeItem("comind.accessToken");

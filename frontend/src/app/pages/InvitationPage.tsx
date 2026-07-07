@@ -9,6 +9,7 @@ interface InvitationPageProps {
   onClose: () => void;
   onLogout: () => void;
   onDeleteAccount: () => Promise<void>;
+  onProfileUpdate: (payload: { name?: string; currentPassword?: string; newPassword?: string }) => Promise<void>;
   onMemberRoleChange: (workspaceId: string, member: MemberData, role: "editor" | "viewer") => Promise<void>;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onAccept: (invitationId: number) => Promise<void>;
@@ -22,7 +23,7 @@ interface InvitationPageProps {
 }
 
 export function InvitationPage({
-  user, workspaces, invitations, onOpenCanvas, onClose, onLogout, onDeleteAccount, onMemberRoleChange, onInvite, onAccept, onReject,
+  user, workspaces, invitations, onOpenCanvas, onClose, onLogout, onDeleteAccount, onProfileUpdate, onMemberRoleChange, onInvite, onAccept, onReject,
   onWorkspaceRename, onWorkspaceDelete, onMemberRemove, onWorkspaceLeave, onMapRename, onMapDelete,
 }: InvitationPageProps) {
   return (
@@ -35,6 +36,7 @@ export function InvitationPage({
         onViewInvitation={() => undefined}
         onLogout={onLogout}
         onDeleteAccount={onDeleteAccount}
+        onProfileUpdate={onProfileUpdate}
         onMemberRoleChange={onMemberRoleChange}
         onInvite={onInvite}
         onWorkspaceRename={onWorkspaceRename}

@@ -1,18 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.connection_manager import workspace_manager
+from app.core.connection_manager import manager, workspace_manager
 from app.core.deps import get_current_user
-from app.core.events import member_removed_event
-from app.crud.user import anonymize_user, search_users
+from app.core.events import member_event, member_removed_event
+from app.core.security import hash_password, verify_password
+from app.crud.user import anonymize_user, search_users, update_user_profile
 from app.crud.workspace import (
+    list_memberships_for_user,
     list_workspaces_for_user,
     remove_all_memberships,
     user_owns_any_workspace,
 )
 from app.db import get_db
 from app.models.user import User
-from app.schemas.user import UserPublic, UserSearchResult
+from app.schemas.user import ProfileUpdate, UserPublic, UserSearchResult
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -20,6 +22,46 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("/me", response_model=UserPublic)
 async def read_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.patch("/me", response_model=UserPublic)
+async def update_me(
+    payload: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """이름/비밀번호 수정. 비밀번호를 바꾸려면 계정 탈취 시 무단 변경을 막기 위해 현재 비밀번호 확인이 필요하다.
+    이름이 바뀌면 다른 사용자들의 화면(워크스페이스 멤버 목록, 마인드맵 캔버스 접속자 표시)에도
+    실시간으로 반영되도록 워크스페이스/맵 채널에 함께 브로드캐스트한다."""
+    if payload.new_password is not None:
+        if not payload.current_password or not verify_password(payload.current_password, current_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="현재 비밀번호가 올바르지 않습니다",
+            )
+        if verify_password(payload.new_password, current_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="새 비밀번호는 현재 비밀번호와 달라야 합니다",
+            )
+
+    name_changed = payload.name is not None and payload.name != current_user.name
+    password_hash = hash_password(payload.new_password) if payload.new_password is not None else None
+    updated = await update_user_profile(db, current_user, name=payload.name, password_hash=password_hash)
+
+    if name_changed:
+        touched_maps = manager.update_user_info(updated.id, name=updated.name)
+        for map_id in touched_maps:
+            await manager.broadcast(map_id, {"type": "presence:update", "users": manager.list_users(map_id)})
+
+        memberships = await list_memberships_for_user(db, updated.id)
+        for membership in memberships:
+            await workspace_manager.broadcast(
+                membership.workspace_id,
+                member_event("member:updated", membership.workspace_id, membership),
+            )
+
+    return updated
 
 
 @router.delete("/me")

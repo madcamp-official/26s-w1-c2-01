@@ -25,16 +25,16 @@ function LoadingScreen() {
 // (workspaces가 막 채워진 시점에 별도 "resolved" state로 한 박자 늦게 반영하면,
 //  그 사이 렌더에서 아직 못 찾은 것으로 오판해 /workspaces로 리다이렉트되는 경쟁 상태가 생긴다)
 function MindMapRoute({
-  user, bootstrapped, workspaces, userInitials, onBack, onInvite, onLogout, onDeleteAccount, onMapRename, onMapDelete,
+  user, bootstrapped, workspaces, onBack, onInvite, onLogout, onDeleteAccount, onProfileUpdate, onMapRename, onMapDelete,
 }: {
   user: User | null;
   bootstrapped: boolean;
   workspaces: WorkspaceData[];
-  userInitials: string;
   onBack: () => void;
   onInvite: (workspaceId: string, email: string, role: "editor" | "viewer") => Promise<void>;
   onLogout: () => void;
   onDeleteAccount: () => Promise<void>;
+  onProfileUpdate: (payload: { name?: string; currentPassword?: string; newPassword?: string }) => Promise<void>;
   onMapRename: (workspaceId: string, mapId: string, name: string) => Promise<void>;
   onMapDelete: (workspaceId: string, mapId: string) => Promise<void>;
 }) {
@@ -49,13 +49,14 @@ function MindMapRoute({
       <MindMapPage
         workspace={matchedWorkspace}
         map={matchedMap}
-        userInitials={userInitials}
+        user={user}
         currentUserId={user.id}
         currentRole={matchedWorkspace.currentRole}
         onBack={onBack}
         onInvite={onInvite}
         onLogout={onLogout}
         onDeleteAccount={onDeleteAccount}
+        onProfileUpdate={onProfileUpdate}
         onMapRename={name => onMapRename(matchedWorkspace.id, matchedMap.id, name)}
         onMapDelete={async () => { await onMapDelete(matchedWorkspace.id, matchedMap.id); onBack(); }}
       />
@@ -136,6 +137,11 @@ function AppRoutes() {
     logout();
   };
 
+  const updateProfile = async (payload: { name?: string; currentPassword?: string; newPassword?: string }) => {
+    const updated = await api.updateProfile(payload);
+    setUser(updated);
+  };
+
   const inviteToWorkspace = async (workspaceId: string, email: string, role: "editor" | "viewer") => {
     const results = await api.searchUsers(email);
     const match = results.find(candidate => candidate.email.toLowerCase() === email.toLowerCase());
@@ -201,6 +207,7 @@ function AppRoutes() {
           : user
           ? <WorkspacePage user={user} workspaces={workspaces} pendingInvitationCount={invitations.length} onOpenCanvas={openCanvas} onViewInvitation={() => navigate("/invitations")} onLogout={logout}
               onDeleteAccount={deleteAccount}
+              onProfileUpdate={updateProfile}
               onInvite={inviteToWorkspace}
               onMemberRoleChange={async (workspaceId, member, role) => {
                 if (!member.userId) throw new Error("사용자 ID를 확인할 수 없습니다");
@@ -223,6 +230,7 @@ function AppRoutes() {
           : user
           ? <InvitationPage user={user} workspaces={workspaces} invitations={invitations} onOpenCanvas={openCanvas} onClose={() => navigate("/workspaces")} onLogout={logout}
               onDeleteAccount={deleteAccount}
+              onProfileUpdate={updateProfile}
               onInvite={inviteToWorkspace}
               onMemberRoleChange={async (workspaceId, member, role) => {
                 if (!member.userId) throw new Error("사용자 ID를 확인할 수 없습니다");
@@ -249,11 +257,11 @@ function AppRoutes() {
           user={user}
           bootstrapped={bootstrapped}
           workspaces={workspaces}
-          userInitials={user ? user.name.split(" ").map(part => part[0]).join("") : ""}
           onBack={() => { if (user) loadWorkspaces(user); navigate("/workspaces"); }}
           onInvite={inviteToWorkspace}
           onLogout={logout}
           onDeleteAccount={deleteAccount}
+          onProfileUpdate={updateProfile}
           onMapRename={renameMap}
           onMapDelete={deleteMap}
         />

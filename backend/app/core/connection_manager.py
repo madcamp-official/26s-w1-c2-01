@@ -31,6 +31,18 @@ class ConnectionManager:
         if info is not None:
             info["selected_block_id"] = block_id
 
+    def update_user_info(self, user_id: int, **fields: object) -> set[int]:
+        """프로필 수정 등으로 이름이 바뀌었을 때, 이미 접속 중인 채널들의 캐시된 user_info를 갱신.
+        접속 시점에 박아둔 값이라 그대로 두면 재접속 전까지 presence에 옛 이름이 보인다.
+        갱신이 일어난 channel_id 집합을 반환해 호출 쪽에서 presence:update를 다시 브로드캐스트할 수 있게 한다."""
+        touched: set[int] = set()
+        for channel_id, connections in self._connections.items():
+            for info in connections.values():
+                if info is not None and info.get("id") == user_id:
+                    info.update(fields)
+                    touched.add(channel_id)
+        return touched
+
     def list_users(self, channel_id: int) -> list[dict]:
         """현재 채널에 연결된 유저 목록 (같은 유저가 여러 탭으로 접속해도 한 번만)"""
         connections = self._connections.get(channel_id, {})

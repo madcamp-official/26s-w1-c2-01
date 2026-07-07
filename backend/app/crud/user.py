@@ -35,6 +35,18 @@ async def search_users(db: AsyncSession, query: str, limit: int = 10) -> list[Us
     return list(result.scalars().all())
 
 
+async def update_user_profile(
+    db: AsyncSession, user: User, name: str | None = None, password_hash: str | None = None
+) -> User:
+    if name is not None:
+        user.name = name
+    if password_hash is not None:
+        user.password_hash = password_hash
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 async def anonymize_user(db: AsyncSession, user: User) -> None:
     """회원 탈퇴 처리. 블록/코멘트/초대 등 다른 사용자의 콘텐츠에 남아있는 작성자 참조(FK)가
     깨지지 않도록 User row 자체는 지우지 않고, 로그인이 불가능하도록 개인정보만 비식별화한다."""

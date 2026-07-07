@@ -94,6 +94,14 @@ async def remove_member(db: AsyncSession, membership: WorkspaceMember) -> None:
     await db.commit()
 
 
+async def list_memberships_for_user(db: AsyncSession, user_id: int) -> list[WorkspaceMember]:
+    """유저가 속한 모든 워크스페이스의 멤버십. 프로필(이름) 변경 시 각 워크스페이스 채널로
+    member:updated를 브로드캐스트하기 위해 사용 (WorkspaceMember.user는 lazy="joined"라 갱신된 이름이 바로 반영됨)"""
+    stmt = select(WorkspaceMember).where(WorkspaceMember.user_id == user_id)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def user_owns_any_workspace(db: AsyncSession, user_id: int) -> bool:
     stmt = select(Workspace.id).where(Workspace.owner_id == user_id).limit(1)
     result = await db.execute(stmt)

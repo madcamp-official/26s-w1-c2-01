@@ -3,6 +3,17 @@ import re
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+def _validate_password_strength(value: str) -> str:
+    """회원가입/프로필 수정에서 공통으로 쓰는 비밀번호 강도 검사 (8자 이상은 Field(min_length=8)에서 별도 처리)"""
+    if not re.search(r"[A-Za-z]", value):
+        raise ValueError("비밀번호는 알파벳을 포함해야 합니다")
+    if not re.search(r"\d", value):
+        raise ValueError("비밀번호는 숫자를 포함해야 합니다")
+    if not re.search(r"[^A-Za-z0-9]", value):
+        raise ValueError("비밀번호는 특수문자를 포함해야 합니다")
+    return value
+
+
 class UserCreate(BaseModel):
     email: str = Field(
         min_length=3,
@@ -15,13 +26,18 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        if not re.search(r"[A-Za-z]", value):
-            raise ValueError("비밀번호는 알파벳을 포함해야 합니다")
-        if not re.search(r"\d", value):
-            raise ValueError("비밀번호는 숫자를 포함해야 합니다")
-        if not re.search(r"[^A-Za-z0-9]", value):
-            raise ValueError("비밀번호는 특수문자를 포함해야 합니다")
-        return value
+        return _validate_password_strength(value)
+
+
+class ProfileUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=50, description="화면에 표시될 이름")
+    current_password: str | None = Field(None, description="비밀번호를 바꿀 때 본인 확인용")
+    new_password: str | None = Field(None, min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str | None) -> str | None:
+        return _validate_password_strength(value) if value is not None else value
 
 
 class UserPublic(BaseModel):
