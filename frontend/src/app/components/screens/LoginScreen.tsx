@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../../../api/client";
 import { Brain, Check } from "lucide-react";
+import { PASSWORD_REQUIREMENTS } from "../../data/const";
 
 // 로그인 화면 왼쪽 패널을 채우는 장식 요소. 실제 데이터가 아니라 브랜딩용 정적 배치이므로 모듈 스코프 상수로 둔다.
 // 로고(좌상단, x<26% y<15%)와 헤드라인 텍스트가 흐르는 가운데 밴드(대략 x<60%, y 26~78%)만 비워두고,
@@ -29,13 +30,6 @@ const NETWORK_EDGES = [
   [0, 1], [1, 2], [0, 4], [4, 3],
   [2, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10],
   [10, 12], [12, 11], [12, 13], [13, 14], [14, 9], [13, 9],
-];
-
-const PASSWORD_REQUIREMENTS: { label: string; test: (value: string) => boolean }[] = [
-  { label: "8자 이상", test: value => value.length >= 8 },
-  { label: "영문 포함", test: value => /[A-Za-z]/.test(value) },
-  { label: "숫자 포함", test: value => /[0-9]/.test(value) },
-  { label: "특수문자 포함", test: value => /[^A-Za-z0-9]/.test(value) },
 ];
 
 const LOGIN_SPARKLES = [
