@@ -31,7 +31,8 @@
 
 ### 필수 기능
 
-- [x] 회원가입 / 로그인 — 아이디(이메일 형식 문자열, 실제 인증 메일 발송·형식 검증 없음) + 비밀번호, JWT 기반 인증
+- [x] 회원가입 / 로그인 — 아이디(이메일 형식 문자열, 실제 인증 메일 발송·형식 검증 없음) + 비밀번호(영문·숫자·특수문자 포함 8자 이상), 이메일 중복·비밀번호 조건 실시간 확인, JWT 기반 인증
+- [x] 내 프로필 수정 — 프로필 메뉴 모달에서 닉네임/비밀번호 변경(비밀번호는 현재 비밀번호 확인 필수), 변경 시 다른 접속자에게 실시간 반영
 - [x] 회원 탈퇴 (소유한 워크스페이스가 있으면 먼저 정리하도록 안내)
 - [x] 워크스페이스 생성 / 이름 변경 / 삭제
 - [x] 워크스페이스 멤버 권한 3단계 (owner / editor / viewer) — viewer는 읽기 전용
@@ -60,12 +61,13 @@ LoginScreen (로그인/회원가입)
          ├─ ShareModal (초대: 아이디 검색 + 역할 지정)
          ├─ CreateWorkspaceModal / CreateMindMapModal
          ├─ RenameModal / ConfirmModal (이름변경/삭제 공용)
+         ├─ ProfileModal (내 프로필: 닉네임/비밀번호 수정, 배경 블러 처리된 중앙 모달)
          ├─ DeleteAccountModal (회원 탈퇴)
          ├─ InvitationScreen (받은 초대함, 수락/거절)
          └─ CanvasScreen (마인드맵 캔버스)
                ├─ 좌측: 노드 트리 캔버스 (MindNode 컴포넌트, 드래그/연결/삭제)
                ├─ 우측 패널: "노드 조작"(색상·추천) / "댓글"(CommentPanel) 토글
-               └─ ShareModal / RenameModal / ConfirmModal 재사용
+               └─ ShareModal / RenameModal / ConfirmModal / ProfileModal 재사용
 ```
 
 ### 화면별 주요 동작
@@ -193,11 +195,13 @@ erDiagram
 | POST | `/api/v1/auth/login` | 로그인 | `email`, `password` | `access_token`, `refresh_token`, `user` |
 | POST | `/api/v1/auth/refresh` | 액세스 토큰 재발급 | `refresh_token` | `access_token` |
 | POST | `/api/v1/auth/logout` | 로그아웃 | 없음 | `message` |
+| GET | `/api/v1/auth/email-availability` | 회원가입 폼에서 이메일 중복 여부 실시간 확인 (인증 불필요) | `email` | `available` |
 
 ### User
 | Method | Endpoint | 설명 | 요청 | 응답 |
 |---|---|---|---|---|
 | GET | `/api/v1/users/me` | 내 정보 조회 | 없음 | `id`, `email`, `name` |
+| PATCH | `/api/v1/users/me` | 내 프로필 수정(닉네임/비밀번호). 비밀번호 변경 시 현재 비밀번호 확인 필수, 기존과 동일한 새 비밀번호는 거부. 닉네임 변경 시 소속된 모든 워크스페이스·마인드맵 채널에 실시간 반영 | `name?`, `current_password?`, `new_password?` | `id`, `email`, `name` |
 | DELETE | `/api/v1/users/me` | 회원 탈퇴 (소유 워크스페이스 있으면 400) | 없음 | `message` |
 | GET | `/api/v1/users/search` | 유저 검색 (초대용, 이메일 부분일치) | `q` | `users[]` |
 
@@ -256,8 +260,8 @@ erDiagram
 ### WebSocket
 | Endpoint | 설명 |
 |---|---|
-| `WS /api/v1/ws/maps/{map_id}` | 마인드맵 단위 채널 — 블록/코멘트/추천 이벤트 + 접속자 프레즌스(누가 어느 노드를 보고 있는지) |
-| `WS /api/v1/ws/workspaces/{workspace_id}` | 워크스페이스 단위 채널 — 이름/멤버 변화, 마인드맵 목록 변화 |
+| `WS /api/v1/ws/maps/{map_id}` | 마인드맵 단위 채널 — 블록/코멘트/추천 이벤트 + 접속자 프레즌스(누가 어느 노드를 보고 있는지). 프로필에서 닉네임을 바꾸면 접속 중인 프레즌스 표시도 즉시 갱신 |
+| `WS /api/v1/ws/workspaces/{workspace_id}` | 워크스페이스 단위 채널 — 이름/멤버 변화, 마인드맵 목록 변화. 멤버가 프로필에서 닉네임을 바꾸면 `member:updated` 이벤트로 멤버 목록에도 실시간 반영 |
 | `WS /api/v1/ws/users/{user_id}` | 유저 단위 채널 — 새 초대 알림 |
 
 ---
@@ -308,6 +312,7 @@ npm run dev
 - 백엔드/프론트엔드 모두 `main` 브랜치에 각 디렉토리(`backend/**`, `frontend/**`) 변경이 push되면 GitHub Actions(`.github/workflows/deploy-backend.yml`, `deploy-frontend.yml`)가 EC2에 SSH 접속해 자동 배포
   - 백엔드: `docker compose up -d --build --no-deps api worker`로 API·워커 컨테이너만 재기동
   - 프론트엔드: `npm run build` 후 결과물을 `rsync`로 Nginx 정적 경로(`/var/www/comind/`)에 배포, `nginx reload`
+  - 두 워크플로우가 EC2의 같은 git 저장소를 공유하므로, 하나의 커밋이 `backend/`와 `frontend/`를 동시에 건드려 두 배포가 동시에 트리거되어도 git 명령이 충돌하지 않도록 `concurrency.group`을 공유해 순서대로 실행
 - Nginx가 `/api/`, `/api/v1/ws/`를 백엔드 컨테이너(`127.0.0.1:8000`)로 리버스 프록시
 - 프론트·백엔드가 같은 도메인(Nginx 기준 same-origin)으로 서비스되어 CORS 이슈 없이 동작
 
