@@ -48,3 +48,26 @@ export interface CommentData {
     content: string;
     solved: boolean;
 }
+
+export interface DragState {
+  type: "idle" | "node" | "pan";
+  nodeId: string | null;
+  startPointer: { x: number; y: number };
+  startValue: { x: number; y: number };
+  moved: boolean;
+}
+
+export interface RecommendationState {
+  sourceId: string;
+  sourceX: number;
+  sourceY: number;
+  visible: boolean;
+}
+
+export interface RecommendationItem {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+}
