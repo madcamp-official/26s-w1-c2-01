@@ -12,6 +12,10 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class EmailAvailabilityResponse(BaseModel):
+    available: bool
+
+
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

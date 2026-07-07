@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
@@ -9,10 +9,26 @@ from app.core.security import (
 )
 from app.crud.user import create_user, get_user_by_email, get_user_by_id
 from app.db import get_db
-from app.schemas.auth import AccessTokenResponse, LoginRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import (
+    AccessTokenResponse,
+    EmailAvailabilityResponse,
+    LoginRequest,
+    RefreshRequest,
+    TokenResponse,
+)
 from app.schemas.user import UserCreate, UserPublic
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.get("/email-availability", response_model=EmailAvailabilityResponse)
+async def email_availability(
+    email: str = Query(min_length=3, max_length=255),
+    db: AsyncSession = Depends(get_db),
+):
+    """회원가입 폼에서 이메일 입력 중 실시간으로 중복 여부를 보여주기 위한 공개 엔드포인트"""
+    existing = await get_user_by_email(db, email)
+    return EmailAvailabilityResponse(available=existing is None)
 
 
 @router.post("/signup", response_model=UserPublic, status_code=status.HTTP_201_CREATED)

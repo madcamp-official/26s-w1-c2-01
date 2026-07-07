@@ -15,6 +15,20 @@ interface TokenResponse { access_token: string; refresh_token: string; user: Api
 
 let accessToken = localStorage.getItem("comind.accessToken");
 
+function extractErrorMessage(payload: unknown): string | undefined {
+  const detail = (payload as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(item => (item && typeof item === "object" && typeof (item as { msg?: unknown }).msg === "string"
+        ? (item as { msg: string }).msg.replace(/^Value error,\s*/, "")
+        : null))
+      .filter((msg): msg is string => msg !== null);
+    return messages.length > 0 ? messages.join("\n") : undefined;
+  }
+  return undefined;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -26,7 +40,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.detail ?? `API 요청 실패 (${response.status})`);
+    throw new Error(extractErrorMessage(payload) ?? `API 요청 실패 (${response.status})`);
   }
   return response.status === 204 ? undefined as T : response.json();
 }
@@ -41,6 +55,8 @@ export const api = {
   },
   signup: (email: string, password: string, name: string) =>
     request<ApiUser>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password, name }) }),
+  checkEmailAvailability: (email: string) =>
+    request<{ available: boolean }>(`/auth/email-availability?email=${encodeURIComponent(email)}`),
   me: () => request<ApiUser>("/users/me"),
   deleteAccount: () => request<{ message: string }>("/users/me", { method: "DELETE" }),
   logout() {

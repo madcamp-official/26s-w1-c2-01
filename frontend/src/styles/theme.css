@@ -180,3 +180,25 @@
     line-height: 1.5;
   }
 }
+
+/* 로그인 화면 배경의 노드 그래프: 전체가 아주 느리게 좌우로 흔들리고, 개별 노드는 살짝 떠다닌다 */
+.login-network {
+  transform-origin: 50% 50%;
+  animation: login-network-sway 14s ease-in-out infinite;
+}
+
+.login-network-node {
+  animation-name: login-network-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes login-network-sway {
+  0%, 100% { transform: rotate(-2.2deg); }
+  50% { transform: rotate(2.2deg); }
+}
+
+@keyframes login-network-float {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(var(--dx, 4px), var(--dy, -4px)); }
+}

@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -9,6 +11,17 @@ class UserCreate(BaseModel):
     )
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=1, max_length=50, description="화면에 표시될 이름")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not re.search(r"[A-Za-z]", value):
+            raise ValueError("비밀번호는 알파벳을 포함해야 합니다")
+        if not re.search(r"\d", value):
+            raise ValueError("비밀번호는 숫자를 포함해야 합니다")
+        if not re.search(r"[^A-Za-z0-9]", value):
+            raise ValueError("비밀번호는 특수문자를 포함해야 합니다")
+        return value
 
 
 class UserPublic(BaseModel):

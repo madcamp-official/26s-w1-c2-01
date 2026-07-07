@@ -142,22 +142,37 @@ function applyWorkspaceRealtimeEvent(prev: WorkspaceData[], data: any, currentUs
 // 로그인 화면 왼쪽 패널을 채우는 장식 요소. 실제 데이터가 아니라 브랜딩용 정적 배치이므로 모듈 스코프 상수로 둔다.
 // 로고(좌상단, x<26% y<15%)와 헤드라인 텍스트가 흐르는 가운데 밴드(대략 x<60%, y 26~78%)만 비워두고,
 // 그 위/아래 여백과 오른쪽 세로줄에는 촘촘히 배치해 밀도를 확보한다.
-const LOGIN_FLOATERS = [
-  { x: 60, y: 8,  w: 62, color: "#ef4444", label: "구축" },
-  { x: 78, y: 5,  w: 60, color: "#06b6d4", label: "연결" },
-  { x: 92, y: 14, w: 70, color: "#8b5cf6", label: "브레인스토밍" },
-  { x: 12, y: 20, w: 58, color: "#f59e0b", label: "메모" },
-  { x: 34, y: 18, w: 56, color: "#3b82f6", label: "흐름" },
-  { x: 82, y: 28, w: 60, color: "#f59e0b", label: "정리" },
-  { x: 92, y: 40, w: 58, color: "#8b5cf6", label: "탐색" },
-  { x: 78, y: 52, w: 60, color: "#3b82f6", label: "생각" },
-  { x: 90, y: 64, w: 58, color: "#ef4444", label: "구상" },
-  { x: 80, y: 76, w: 56, color: "#10b981", label: "기록" },
-  { x: 92, y: 88, w: 58, color: "#ec4899", label: "공유" },
-  { x: 6,  y: 86, w: 62, color: "#6366f1", label: "아이디어" },
-  { x: 26, y: 92, w: 62, color: "#ec4899", label: "동기화" },
-  { x: 50, y: 88, w: 58, color: "#6366f1", label: "확장" },
-  { x: 66, y: 82, w: 58, color: "#8b5cf6", label: "발산" },
+// CoMind는 마인드맵 서비스이므로 텍스트 뱃지 대신, 서로 연결된 노드-엣지 그래프로 표현해 은은하게 움직이게 한다.
+const NETWORK_NODES = [
+  { x: 60, y: 8,  r: 3.4, color: "#ef4444", dx: 5,  dy: -4, dur: 3.6, delay: 0 },
+  { x: 78, y: 5,  r: 2.6, color: "#06b6d4", dx: -4, dy: 5,  dur: 4.2, delay: 0.3 },
+  { x: 92, y: 14, r: 4,   color: "#8b5cf6", dx: -5, dy: -4, dur: 3.9, delay: 0.6 },
+  { x: 12, y: 20, r: 3,   color: "#f59e0b", dx: 4,  dy: 5,  dur: 4.6, delay: 0.15 },
+  { x: 34, y: 18, r: 2.4, color: "#3b82f6", dx: -4, dy: 4,  dur: 4.1, delay: 0.9 },
+  { x: 82, y: 28, r: 3.2, color: "#f59e0b", dx: 5,  dy: 4,  dur: 3.7, delay: 0.45 },
+  { x: 92, y: 40, r: 2.8, color: "#8b5cf6", dx: -5, dy: 5,  dur: 4.4, delay: 0.75 },
+  { x: 78, y: 52, r: 3.6, color: "#3b82f6", dx: 4,  dy: -5, dur: 3.95, delay: 0.2 },
+  { x: 90, y: 64, r: 2.6, color: "#ef4444", dx: -4, dy: -5, dur: 4.7, delay: 1.05 },
+  { x: 80, y: 76, r: 3,   color: "#10b981", dx: 5,  dy: 4,  dur: 3.6, delay: 0.5 },
+  { x: 92, y: 88, r: 2.8, color: "#ec4899", dx: -4, dy: -4, dur: 4.45, delay: 0.1 },
+  { x: 6,  y: 86, r: 3.4, color: "#6366f1", dx: 4,  dy: -5, dur: 4.05, delay: 0.7 },
+  { x: 26, y: 92, r: 2.6, color: "#ec4899", dx: -5, dy: 4,  dur: 4.8, delay: 0.35 },
+  { x: 50, y: 88, r: 3.8, color: "#6366f1", dx: 4,  dy: 5,  dur: 3.75, delay: 0.95 },
+  { x: 66, y: 82, r: 2.8, color: "#8b5cf6", dx: -4, dy: -4, dur: 4.25, delay: 0.25 },
+];
+
+// 헤드라인이 흐르는 가운데 밴드를 가로지르지 않도록 상단/우측/하단 클러스터 안에서만 서로 이어준다.
+const NETWORK_EDGES = [
+  [0, 1], [1, 2], [0, 4], [4, 3],
+  [2, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10],
+  [10, 12], [12, 11], [12, 13], [13, 14], [14, 9], [13, 9],
+];
+
+const PASSWORD_REQUIREMENTS: { label: string; test: (value: string) => boolean }[] = [
+  { label: "8자 이상", test: value => value.length >= 8 },
+  { label: "영문 포함", test: value => /[A-Za-z]/.test(value) },
+  { label: "숫자 포함", test: value => /[0-9]/.test(value) },
+  { label: "특수문자 포함", test: value => /[^A-Za-z0-9]/.test(value) },
 ];
 
 const LOGIN_SPARKLES = [
@@ -186,13 +201,32 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
 
   const inp = [
     "w-full px-4 py-3 rounded-2xl text-sm text-[#0D0D14] placeholder-[#C0BFC8] bg-[#FAFAFA]",
     "border-2 border-[#E2E0F0] focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15 transition-all",
   ].join(" ");
 
+  const passwordUnmet = PASSWORD_REQUIREMENTS.filter(r => !r.test(password));
+  const passwordInvalid = isSignUp && passwordUnmet.length > 0;
+
+  useEffect(() => {
+    if (!isSignUp || !/^\S+@\S+\.\S+$/.test(email)) { setEmailTaken(false); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const { available } = await api.checkEmailAvailability(email);
+        if (!cancelled) setEmailTaken(!available);
+      } catch {
+        if (!cancelled) setEmailTaken(false);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [email, isSignUp]);
+
   const submit = async () => {
+    if (passwordInvalid || emailTaken) return;
     setSubmitting(true); setError("");
     try { await onLogin(name, email, password, isSignUp); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "로그인에 실패했습니다"); }
@@ -221,13 +255,21 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
         <div className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.065) 1px, transparent 1px)", backgroundSize: "26px 26px" }} />
 
-        {/* 떠다니는 노드 뱃지: 실제 UI 문구와 헷갈리지 않도록 아주 옅은 톤으로만 배치 */}
-        {LOGIN_FLOATERS.map((f, i) => (
-          <div key={i} className="absolute pointer-events-none flex items-center justify-center"
-            style={{ left: `${f.x}%`, top: `${f.y}%`, width: f.w, height: 26, borderRadius: 999, background: f.color + "10", border: `1px solid ${f.color}2a` }}>
-            <span className="text-[10px] font-medium tracking-wide" style={{ color: f.color + "70" }}>{f.label}</span>
-          </div>
-        ))}
+        {/* 서로 연결된 노드 그래프: 마인드맵 서비스임을 은은하게 드러내며, 전체가 느리게 흔들리고 각 노드가 조금씩 떠다닌다 */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none login-network" aria-hidden="true">
+          {NETWORK_EDGES.map(([a, b], i) => {
+            const from = NETWORK_NODES[a], to = NETWORK_NODES[b];
+            return (
+              <line key={i} x1={`${from.x}%`} y1={`${from.y}%`} x2={`${to.x}%`} y2={`${to.y}%`}
+                stroke={from.color} strokeWidth={1} strokeOpacity={0.16} />
+            );
+          })}
+          {NETWORK_NODES.map((n, i) => (
+            <circle key={i} cx={`${n.x}%`} cy={`${n.y}%`} r={n.r} fill={n.color} opacity={0.55}
+              className="login-network-node"
+              style={{ "--dx": `${n.dx}px`, "--dy": `${n.dy}px`, animationDuration: `${n.dur}s`, animationDelay: `${n.delay}s` } as React.CSSProperties} />
+          ))}
+        </svg>
 
         {/* 반짝이 */}
         {LOGIN_SPARKLES.map((s, i) => (
@@ -356,19 +398,36 @@ export function LoginScreen({ onLogin }: { onLogin: (name: string, email: string
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: "#6366f1" }}>이메일</label>
                   <input className={inp} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" />
+                  {isSignUp && emailTaken && (
+                    <p className="mt-1.5 text-[11px] font-medium text-red-500">이미 사용 중인 이메일입니다</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: "#6366f1" }}>비밀번호</label>
                   <input type="password" className={inp} value={password}
                     onChange={e => setPassword(e.target.value)} placeholder="••••••••"
                     onKeyDown={e => e.key === "Enter" && submit()} />
+                  {isSignUp && passwordUnmet.length > 0 && (
+                    <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                      {PASSWORD_REQUIREMENTS.map(r => {
+                        const met = r.test(password);
+                        return (
+                          <li key={r.label} className="flex items-center gap-1 text-[11px] font-medium transition-colors"
+                            style={{ color: met ? "#10b981" : "#ABABAB" }}>
+                            <Check className="w-3 h-3" style={{ opacity: met ? 1 : 0.35 }} />
+                            {r.label}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
 
-                {error && <p className="text-xs text-red-500">{error}</p>}
+                {error && <p className="text-xs text-red-500 whitespace-pre-line">{error}</p>}
 
                 <button
                   onClick={submit}
-                  disabled={submitting}
+                  disabled={submitting || passwordInvalid || (isSignUp && emailTaken)}
                   className="w-full py-3.5 rounded-2xl text-white text-sm font-black tracking-wide transition-all hover:opacity-90 hover:shadow-xl mt-1 disabled:opacity-50"
                   style={{ background: "linear-gradient(90deg, #4F46E5 0%, #7C3AED 55%, #06b6d4 100%)", boxShadow: "0 6px 24px rgba(79,70,229,0.38)" }}
                 >
